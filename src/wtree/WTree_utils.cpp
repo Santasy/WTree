@@ -93,39 +93,45 @@ template <typename T> unsigned long WTree<T>::getTotalBytes() {
 
 /**
   Call the recursive function to checkStatistics from the root of the tree.
+  This inclues:
+    - num_nodes, num_internals, num_leafs
+    - unused_keycells: Unused cells in vector of values
+    - unused_ptrscells: Unused cells in vector of pointers
+    - connectivity: Connectivity is the ratio of used pointer connections over
+                    all the allocated pointer cells.
+
 */
 template <typename T> void WTree<T>::checkStatistics(MemRegister *reg) {
-  if (root)
-    _checkStatistics(reg, root, 0);
-  reg->num_leafs = reg->num_nodes - reg->num_internals;
-  reg->total_bytes = reg->num_nodes * sizeof(t_node) + // 24 bytes +
-                     reg->unused_keycells * sizeof(T) +
-                     reg->num_internals * (k - 1) * sizeof(t_node *);
-  reg->average_bytes_per_key = (double)reg->total_bytes / reg->keys;
+  if (root == nullptr)
+    return;
+  _checkStatistics(reg, root, 0);
+  reg->evaluate<T, t_node>(k);
 }
 
 /**
-  Calculate all the implemented statistics of the tree.
-  This inclues:
-    - num_nodes, num_internals, num_leafs
-    - unused_valuecells: Unused cells in vector of values
-    - unsigned long unused_pointercells: Unused cells in vector of pointers
+  Calculate all the implemented statistics of the tree from a particular node.
 */
 template <typename T>
 void WTree<T>::_checkStatistics(MemRegister *reg, const t_node *u,
                                 ulong depth) {
-  ++(reg->num_nodes);
-  reg->unused_keycells += u->_fields.capacity - u->_fields.n;
-  reg->keys += u->_fields.n;
+  assert(u);
+  // First ensure the level exists
+  for (size_t i = reg->levels.size(); i < depth + 1; ++i) {
+    reg->levels.push_back(MemRegister::Level());
+    reg->levels[i].level = i;
+  }
 
-  reg->height = max(reg->height, depth);
+  reg->levels[depth].keys += u->_fields.n;
+  ++reg->levels[depth].num_nodes;
+  reg->unused_keycells += u->_fields.capacity - u->_fields.n;
 
   if (u->_fields.isInternal) {
-    (reg->num_internals)++;
-    for (ushort i = 0; i < k - 1; ++i) {
-      if (u->_fields.pointers[i] != nullptr)
+    ++reg->levels[depth].num_internals;
+    for (t_field i = 0; i < k - 1; ++i) {
+      if (u->_fields.pointers[i] != nullptr) {
+        ++reg->levels[depth].acum_connectivity;
         _checkStatistics(reg, u->_fields.pointers[i], depth + 1);
-      else
+      } else
         (reg->unused_ptrscells)++;
     }
   }
@@ -135,7 +141,7 @@ template <typename T> bool WTree<T>::__verify(t_node *u) {
   if (u == nullptr)
     return true;
 
-  for (ushort i = 0; i < u->_fields.n - 1; ++i) {
+  for (t_field i = 0; i < u->_fields.n - 1; ++i) {
     if (u->_fields.keys[i] >= u->_fields.keys[i + 1]) {
 #ifdef VERBOSE
       printf("[VERIFY ERROR] Not in order: %lu %lu\n",

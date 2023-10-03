@@ -1,41 +1,15 @@
 #ifndef WTREECLASS_H
 #define WTREECLASS_H
 
+#include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <stack>
 #include <string>
 #include <sys/types.h>
 #include <vector>
 
 namespace WTreeLib {
-// [1] MemRegisterStruct
-struct MemRegister {
-  unsigned long keys = 0;
-  unsigned long num_nodes = 0;
-  unsigned long height = 0;
-  unsigned long num_internals =
-      0;                       // Number of internal nodes (with descendents)
-  unsigned long num_leafs = 0; // Number of leaf nodes (no descendents)
-  unsigned long unused_keycells = 0;  // Unused cells in vector of keys
-  unsigned long unused_ptrscells = 0; // Unused cells in vector of pointers
-
-  unsigned long total_bytes = 0;
-  double average_bytes_per_key = 0; // Calculated as total_bytes/keys
-
-  void clean() {
-    keys = 0;
-    height = 0;
-    num_nodes = 0;
-    num_internals = 0;
-
-    num_leafs = 0;
-    unused_keycells = 0;
-    unused_ptrscells = 0;
-
-    total_bytes = 0;
-    average_bytes_per_key = 0;
-  };
-};
 
 // [2] Node structure
 template <typename T> class WTreeNode {
@@ -84,6 +58,107 @@ public:
   int getHeight() const;
 
   unsigned long getTotalBytes() const;
+};
+
+// [1] MemRegisterStruct
+struct MemRegister {
+  struct Level {
+    unsigned int level = 0;
+    unsigned long keys = 0;
+    unsigned long num_nodes = 0;
+    unsigned long num_internals = 0;
+    unsigned long num_leafs = 0;
+    double connectivity = 0.0;
+
+    double acum_connectivity = 0.0;
+
+    void evaluate(unsigned int k) {
+      num_leafs = num_nodes - num_internals;
+      connectivity =
+          num_internals > 0 ? acum_connectivity / (num_internals * (k - 1)) : 0;
+    };
+  };
+  std::vector<Level> levels;
+
+  unsigned long keys = 0;
+  unsigned long num_nodes = 0;
+  unsigned long height = 0;
+  unsigned long num_internals =
+      0;                       // Number of internal nodes (with descendents)
+  unsigned long num_leafs = 0; // Number of leaf nodes (no descendents)
+  unsigned long unused_keycells = 0;  // Unused cells in vector of keys
+  unsigned long unused_ptrscells = 0; // Unused cells in vector of pointers
+
+  unsigned long total_bytes = 0;
+
+  double average_bytes_per_key = 0; // Calculated as total_bytes/keys
+  double connectivity = 0.0;
+
+  template <typename T, class NODE> void evaluate(unsigned int k) {
+    // Evaluate levels:
+    for (uint l = 0; l < levels.size(); ++l) {
+      Level &level = levels[l];
+      assert(level.level == l);
+      level.evaluate(k);
+      keys += level.keys;
+      num_nodes += level.num_nodes;
+      num_internals += level.num_internals;
+      connectivity += level.acum_connectivity; // use as acum
+    }
+
+    // Calculate general values:
+    num_leafs = num_nodes - num_internals;
+    connectivity = connectivity / (num_internals * (k - 1));
+
+    total_bytes = num_nodes * sizeof(NODE) + // 24 bytes +
+                  unused_keycells * sizeof(T) +
+                  num_internals * (k - 1) * sizeof(NODE *);
+    average_bytes_per_key = (double)total_bytes / keys;
+  };
+
+  char *toJsonBody() {
+    char *oline = new char[300 + 140 * levels.size()];
+    const double fullness = (double)keys / (keys + unused_keycells);
+    int send = sprintf(oline,
+                       "\"keys\": %10lu,"
+                       "\"nodes\": %6lu,"
+                       "\"height\": %3lu,\n"
+                       "\"internals\": %4lu,"
+                       "\"leafs\": %4lu,"
+                       "\"unused_keycells\": %6lu,"
+                       "\"unused_ptrscells\": %6lu,\n"
+                       "\"total_bytes\": %10lu,"
+                       "\"overhead\": %f,"
+                       "\"fullness\": %f,"
+                       "\"connectivity\": %f,\n",
+                       keys, num_nodes, height, num_internals, num_leafs,
+                       unused_keycells, unused_ptrscells, total_bytes,
+                       average_bytes_per_key, fullness, connectivity);
+    send += sprintf(oline + send, "\"levels\":[\n");
+    for (size_t l = 0; l < levels.size(); ++l) {
+      const Level &level = levels[l];
+      send += sprintf(oline + send,
+                      "\t{"
+                      "\"level\": %3u, "
+                      "\"keys\": %5lu, "
+                      "\"num_nodes\": %4lu, "
+                      "\"num_internals\": %4lu, "
+                      "\"num_leafs\": %4lu, "
+                      "\"connectivity\": %f"
+                      "}%c\n",
+                      level.level, level.keys, level.num_nodes,
+                      level.num_internals, level.num_leafs, level.connectivity,
+                      l < levels.size() - 1 ? ',' : ' ');
+    }
+    sprintf(oline + send, "]");
+    return oline;
+  };
+
+  void clean() {
+    levels.clear();
+    std::fill(&keys, &keys + sizeof(MemRegister) - sizeof(std::vector<Level>),
+              0);
+  };
 };
 
 template <typename T> class WTree {
