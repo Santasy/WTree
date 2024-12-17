@@ -5,9 +5,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <limits>
-#include <new>
 #include <random>
 #include <sys/types.h>
 
@@ -39,14 +37,14 @@ protected:
         new ulong[max_value / 64 + 1](); // The parenthesis sets values to 0.
   }
 
-  BaseGenerator(ulong _seed = 0, ulong maxval = 2147483647)
+  explicit BaseGenerator(ulong _seed = 0, ulong maxval = 2147483647)
       : seed(_seed), max_value(maxval), annotated(0) {
     assert(maxval <= numeric_limits<T>::max());
     baseInit();
   }
 
   virtual T operator()() { return T(); };
-  virtual void reset(){};
+  virtual void reset() {};
 
 public:
   ~BaseGenerator() {
@@ -69,14 +67,9 @@ public:
       delete eng;
   }
 
-  // virtual ~BaseGenerator() { delete[] visited; }
-
   bool checkKey(const T key) {
     _block = key / 64;
     _bi = key % 64;
-    // ulong num = (1l << _bi) & visited[_block];
-    // printf("Checking:\n%08lx\n%08lx --- %lu\n", visited[_block], (1l << _bi),
-    // num);
     return (1lu << _bi) & visited[_block];
   }
 
@@ -140,16 +133,9 @@ public:
   }
 };
 
-template class BaseGenerator<int>;
-template class BaseGenerator<unsigned int>;
-template class BaseGenerator<long>;
-template class BaseGenerator<unsigned long>;
-template class BaseGenerator<long long>;
-template class BaseGenerator<unsigned long long>;
-
 template <typename T> class UniformGenerator : public BaseGenerator<T> {
 public:
-  UniformGenerator(ulong seed = 0, ulong maxval = 2147483647)
+  explicit UniformGenerator(ulong seed = 0, ulong maxval = 2147483647)
       : BaseGenerator<T>(seed, maxval) {
     this->eng = new default_random_engine(seed);
     this->udist = new uniform_int_distribution<T>(0, maxval);
@@ -163,6 +149,7 @@ public:
 
     this->eng = new default_random_engine(this->seed);
     this->udist = new uniform_int_distribution<T>(0, this->max_value);
+    BaseGenerator<T>::baseInit();
   }
 };
 
@@ -263,9 +250,9 @@ public:
     return this->currval;
   }
 
-  void saveState() override { this->temp_currval = this->currval; }
+  void saveState() { this->temp_currval = this->currval; }
 
-  void restoreState() override { this->currval = this->temp_currval; }
+  void restoreState() { this->currval = this->temp_currval; }
 
   void reset() override {
     *this = SequentialGenerator(this->seed, this->max_value);

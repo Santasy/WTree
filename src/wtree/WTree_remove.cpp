@@ -1,210 +1,243 @@
 #include "WTree.h"
-#include <algorithm>
-#include <cstddef>
-#include <iterator>
 
 using namespace std;
 using namespace WTreeLib;
 
 /**
-  Use the remove function with all keys in 'keys'.
+  Remove 'val' from the tree.
+  Returns true if 'val' was removed.
 */
-template <typename T> vector<bool> WTree<T>::remove(const vector<T> &keys) {
-  vector<bool> results;
-  for (T key : keys)
-    results.push_back(remove(key));
-  return results;
-}
+template <typename T> bool WTree<T>::remove(T val) {
+  typename node_type::field_type ui, pi = 0, vpos;
+  WTreeNode<T> *p = nullptr, *u = nullptr;
 
-/**
-  Use the remove function with all keys in 'keys'.
-*/
-template <typename T>
-vector<bool> WTree<T>::remove(const T *&keys, unsigned int n) {
-  vector<bool> results;
-  for (unsigned int i = 0; i < n; ++i)
-    results.push_back(remove(keys[i]));
-  return results;
-}
+  bool found = find(val, &p, &u, pi, ui);
 
-/**
-  Remove 'key' from the tree.
-  Returns true if 'key' was removed.
-*/
-template <typename T> bool WTree<T>::remove(T key) {
-  t_field lwb, p_lwb = 0;
-  t_node *p = nullptr, *u = nullptr;
-
-  bool found = find(key, p, u, p_lwb, lwb);
-  if (found == false) [[unlikely]]
+  if (__builtin_expect_with_probability(found == false, true, 0.1))
     return false;
-  --size;
 
-  if (u->_fields.n == 1) {
-    if (p == nullptr)
-      root = nullptr;
-    else {
-      p->_fields.pointers[p_lwb] = nullptr;
-      // Here we can also check if p must be leaf again.
+  if (__builtin_expect_with_probability(u->_fields.n == 1, true, 0.1)) {
+    if (__builtin_expect(p != nullptr, true)) {
+      p->_fields.pointers[pi] = nullptr;
+      if (u->_fields.isInternal)
+        delete_internal_node(u);
+      else
+        delete_leaf_node(u);
     }
-    delete u;
-    return true;
-  }
 
-  if (u->_fields.isInternal) {
+    --size;
+    return true;
+
+  } else if (u->_fields.isInternal) {
     // Seek valid descendent
-    // keys: [ 0   1   2   3       lwb     5   6   7   8  ]
-    // ptrs: [   0   1   2   lwb-1     lwb   5   6   7   8]
-    ushort vpos;
 
     // First to the left:
-    for (vpos = lwb; vpos > 0 && u->_fields.pointers[vpos - 1] == nullptr;
+    for (vpos = ui; vpos > 0 && u->_fields.pointers[vpos - 1] == nullptr;
          --vpos)
       ;
 
-    if (vpos > 0) { // Found pointer to the left
-      t_node *v = u->_fields.pointers[vpos - 1];
+    if (vpos > 0) {                                    // Found to the left!
+      WTreeNode<T> *v = u->_fields.pointers[vpos - 1]; // ok
 
-      // Shift keys to right
-      if (vpos != lwb)
-        move_backward(u->_fields.keys + vpos, u->_fields.keys + lwb,
-                      u->_fields.keys + lwb + 1);
-      u->_fields.keys[vpos] = popMax(v);
+      // Shift values to right
+      move_backward(u->_fields.values + vpos, u->_fields.values + ui,
+                    u->_fields.values + ui + 1);
 
-      // Disconnect v
-      if (v->_fields.n > 0) [[likely]]
-        return true;
-      delete v;
-      u->_fields.pointers[vpos - 1] = nullptr;
+      u->_fields.values[vpos] = popMax(v);
+
+      // check descendencia vacia
+      if (__builtin_expect_with_probability(v->_fields.n == 0, true, 0.1)) {
+        u->_fields.pointers[vpos - 1] = nullptr;
+        if (v->_fields.isInternal)
+          delete_internal_node(v);
+        else
+          delete_leaf_node(v);
+      }
+
+      --size;
       return true;
     }
 
-    // Then, to the right:
-    for (vpos = lwb; vpos < k - 1 && u->_fields.pointers[vpos] == nullptr;
+    // Then, to the right
+    for (vpos = ui;
+         vpos < u->_fields.n - 1 && u->_fields.pointers[vpos] == nullptr;
          ++vpos)
       ;
 
-    if (vpos < k - 1) { // Found to the right!
-      t_node *v = u->_fields.pointers[vpos];
+    if (vpos < u->_fields.n - 1) { // Found to the right!
+      WTreeNode<T> *v = u->_fields.pointers[vpos];
 
-      // Shift keys to left
-      if (lwb != vpos) {
-        move(u->_fields.keys + lwb + 1, u->_fields.keys + vpos + 1,
-             u->_fields.keys + lwb);
+      // Shift values to left
+      move(u->_fields.values + ui + 1, u->_fields.values + vpos + 1,
+           u->_fields.values + ui);
+
+      u->_fields.values[vpos] = popMin(v);
+
+      if (__builtin_expect_with_probability(v->_fields.n == 0, true, 0.1)) {
+        u->_fields.pointers[vpos] = nullptr;
+        if (v->_fields.isInternal)
+          delete_internal_node(v);
+        else
+          delete_leaf_node(v);
       }
-      u->_fields.keys[vpos] = popMin(v);
 
-      // Disconnect v
-      if (v->_fields.n > 0) [[likely]]
-        return true;
-      delete v;
-      u->_fields.pointers[vpos] = nullptr;
+      --size;
       return true;
     }
 
     // At this point, we are certain that this node is not internal
-    u->setAsLeaf();
+    if (root != u) {
+      u = make_leaf_from_internal(u);
+      p->_fields.pointers[pi] = u;
+    }
   }
 
-  // Shift keys to left
-  move(u->_fields.keys + lwb + 1, u->_fields.keys + u->_fields.n,
-       u->_fields.keys + lwb);
-  --(u->_fields.n);
+  // Shift values to left
+  move(u->_fields.values + ui + 1, u->_fields.values + u->_fields.n,
+       u->_fields.values + ui);
+  u->popBack();
+  --size;
   return true;
 }
 
 /**
+  Use the remove function with all keys in 'values'.
+*/
+template <typename T> vector<bool> WTree<T>::remove(const vector<T> &values) {
+  vector<bool> results;
+  for (T val : values)
+    results.push_back(remove(val));
+  return results;
+}
+
+/**
+  Use the remove function with all keys in 'values'.
+*/
+template <typename T>
+vector<bool> WTree<T>::remove(const T *&values,
+                              typename node_type::field_type n) {
+  vector<bool> results;
+  for (typename node_type::field_type i = 0; i < n; ++i)
+    results.push_back(remove(values[i]));
+  return results;
+}
+
+/**
   Search and pop the minimum value inside the tree.
-  Note that this function does not modify this->size.
 */
 template <typename T> T WTree<T>::popMin() {
-  if (size == 0) [[unlikely]]
-    return T(0);
-  return popMin(root);
+  WTreeNode<T> *u = root;
+  if (u)
+    return popMin(u);
+
+  return 0;
 }
 
 /**
   Search and pop the minimum value inside the tree with root 'u'.
-  Note that this function does not modify this->size.
 */
-template <typename T> T WTree<T>::popMin(t_node *u) {
+template <typename T> T WTree<T>::popMin(WTreeNode<T> *u) {
   assert(u != nullptr);
-  T minval = u->_fields.keys[0];
+  assert(u->_fields.n > 0);
 
-  if (u->_fields.isInternal == false) {
+  const T minval = u->_fields.values[0];
+  typename node_type::field_type vpos;
+
+  if (__builtin_expect_with_probability(u->_fields.isInternal == false, true,
+                                        0.1)) {
     // Move keys to the left
-    move(u->_fields.keys + 1, u->_fields.keys + u->_fields.n, u->_fields.keys);
-    --u->_fields.n;
+    move(u->_fields.values + 1, u->_fields.values + u->_fields.n,
+         u->_fields.values);
+    u->popBack();
     return minval;
   }
 
-  t_field vpos;
-  for (vpos = 0; vpos < k - 1 && u->_fields.pointers[vpos] == nullptr; ++vpos)
+  // Search pointer to the right
+  for (vpos = 0;
+       vpos < node_type::c_target_k - 1 && u->_fields.pointers[vpos] == nullptr;
+       ++vpos)
     ;
-  if (vpos > 0)
-    move(u->_fields.keys + 1, u->_fields.keys + vpos + 1, u->_fields.keys);
 
-  if (vpos == k) { // Not found
-    u->setAsLeaf();
-    --u->_fields.n;
+  if (__builtin_expect_with_probability(vpos == node_type::c_target_k - 1, true,
+                                        0.1)) { // Not found
+    // u->setAsLeaf(); // Node is not internal
+
+    // Shift keys to the left
+    move(u->_fields.values + 1, u->_fields.values + u->_fields.n,
+         u->_fields.values);
+    u->popBack();
     return minval;
   }
 
-  t_node *v = u->_fields.pointers[vpos];
-  u->_fields.keys[vpos] = popMin(v);
+  // Then, 'v' is found.
 
-  if (v->_fields.n > 0) [[likely]]
-    return minval;
-  delete v;
-  u->_fields.pointers[vpos] = nullptr;
+  // Shift keys to left
+  move(u->_fields.values + 1, u->_fields.values + vpos + 1, u->_fields.values);
+
+  WTreeNode<T> *v = u->_fields.pointers[vpos];
+  u->_fields.values[vpos] = popMin(v);
+  if (__builtin_expect_with_probability(v->_fields.n == 0, true, 0.1)) {
+    u->_fields.pointers[vpos] = nullptr;
+    if (v->_fields.isInternal)
+      delete_internal_node(v);
+    else
+      delete_leaf_node(v);
+  }
+
   return minval;
 }
 
 /**
   Search and pop the maximun value inside the tree.
-  Note that this function does not modify this->size.
 */
 template <typename T> T WTree<T>::popMax() {
-  if (size == 0) [[unlikely]]
-    return T(0);
-  return popMax(root);
+  WTreeNode<T> *u = root;
+  if (u)
+    return popMax(u);
+
+  return 0;
 }
 
 /**
   Search and pop the maximun value inside the tree with root 'u'.
-  Note that this function does not modify this->size.
 */
-template <typename T> T WTree<T>::popMax(t_node *u) {
+template <typename T> T WTree<T>::popMax(WTreeNode<T> *u) {
   assert(u != nullptr);
+  assert(u->_fields.n > 0);
 
-  if (u->_fields.isInternal == false) {
-    --u->_fields.n;
-    return u->_fields.keys[u->_fields.n];
+  const T maxval = u->_fields.values[u->_fields.n - 1];
+  if (__builtin_expect_with_probability(u->_fields.isInternal == false, true,
+                                        0.1)) {
+    u->popBack();
+    return maxval;
   }
 
-  // Search pointer to left
-  t_field vpos;
-  for (vpos = k - 1; vpos > 0 && u->_fields.pointers[vpos - 1] == nullptr;
-       --vpos)
+  // Search pointer to the left
+  typename node_type::field_type vpos;
+  for (vpos = node_type::c_target_k - 1;
+       vpos > 0 && u->_fields.pointers[vpos - 1] == nullptr; --vpos)
     ;
 
-  if (vpos == 0) { // Not found
-    u->setAsLeaf();
-    --u->_fields.n;
-    return u->_fields.keys[u->_fields.n];
+  if (__builtin_expect_with_probability(vpos == 0, true, 0.1)) {
+    // u->setAsLeaf();
+    u->popBack();
+    return maxval;
   }
 
-  // Shift keys to the right
-  T maxval = u->_fields.keys[u->_fields.n - 1];
-  move_backward(u->_fields.keys + vpos, u->_fields.keys + k - 1,
-                u->_fields.keys + k);
-  t_node *v = u->_fields.pointers[vpos - 1];
-  u->_fields.keys[vpos] = popMax(v);
+  // 'v' is found.
+  WTreeNode<T> *v = u->_fields.pointers[vpos - 1];
+  // Shift values to the right
+  move_backward(u->_fields.values + vpos, u->_fields.values + u->_fields.n - 1,
+                u->_fields.values + u->_fields.n);
 
-  // Disconnect v
-  if (v->_fields.n > 0) [[likely]]
-    return maxval;
-  delete v;
-  u->_fields.pointers[vpos - 1] = nullptr;
+  u->_fields.values[vpos] = popMax(v);
+  if (__builtin_expect_with_probability(v->_fields.n == 0, true, 0.1)) {
+    u->_fields.pointers[vpos - 1] = nullptr;
+    if (v->_fields.isInternal)
+      delete_internal_node(v);
+    else
+      delete_leaf_node(v);
+  }
+
   return maxval;
 }
