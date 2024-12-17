@@ -14,7 +14,7 @@ This project has tree main folders within the `src` folder:
 - `wtree/`: Contains the **W-tree** implementation with all its needed code. It has a `.h` file that declares the `WTreeLib` namespace and the `WTree<T>` class, among other structures. Here are some insert and search variants CPP files that define the same functions, and one of them must be chosen for compilation, See the `example/` folder and its makefile to see how to select the WTree CPP files.
 - `utils/`: Here is the utility code that was used to implement the experimental routines that measured time and memory performance. This includes the timer and a 'KeyGenerator' class, which handles key generation while keeping track of the values that appear. This generation is capable of parameterizing uniform, normal (gaussian), and symetric bimodal distributions.
 - `test/`: This folder contains subfolders for the W-tree's tree-critical operations, namely the insert, search, and removal operations. A makefile in the folder's root compiles a '.a' file and uses it to compile the corresponding test for each subdirectory.
-- `example/`: Here is found an example routine that uses a parameterized compilation of the WTree variants using a flexible makefile. First fills the tree to an initial size, then executes a manual insertion and search of keys by user input.
+- `example/`: Here is found an example routine that uses a parameterized compilation of the WTree variants using a flexible makefile. First fills the tree to an initial size, then executes a manual insertion and search of keys by user input. Use the makefile flad `TARGET_NODE_BYTES` to set the target size of a full-leaf node.
 
 ## Use the W-tree
 
