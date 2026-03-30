@@ -1,32 +1,138 @@
-# Prerequisites
-*.d
+.conda/
+**.out
+**.a
+**.o
+**.csv
+**.ipynb_checkpoints
+**.zip
+**.jpg
+**.png
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+**/images/*
+**/storage/*
+**/versions/*
+**/temp/
 
-# Precompiled Headers
-*.gch
-*.pch
+**/__pycache__/
+**/.*cache/
+**/cachegrind.out.*
+**/cg_.output
+!**/configs/*.json
 
-# Compiled Dynamic libraries
+**/clean_wtree/
+
+**.log
+
+nlohmann_json.hpp
+others/cpp-btree/
+others/OWT*/
+others/ttree/
+others/m-ary-tree/
+**.dot
+*callgrind.out*
+
+# CMake build directories
+build/
+build-*/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!cmake/*.cmake
+!cmake/*.cmake.in
+
+# Build outputs
+bin/
+*.a
 *.so
+*.so.*
 *.dylib
 *.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
 *.exe
 *.out
-*.app
+
+# Test executables (from original makefile pattern)
+*.bin
+*.dbg
+*.dbg.bin
+*_test
+*_test_debug
+
+# IDE files
+.vscode/bk*
+.idea/
+*.swp
+*.swo
+*~
+
+# Compilation database
+compile_commands.json
+
+# Coverage files
+*.gcov
+*.gcda
+*.gcno
+coverage.info
+coverage/
+lcov.info
+
+# Profiling and debugging
+*.prof
+*_prof_output.txt
+valgrind*.log
+gmon.out
+cachegrind.out.*
+callgrind.out.*
+massif.out.*
+
+# Package files
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+_CPack_Packages/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Log files
+*.log
+
+# Documentation build
+docs/_build/
+docs/html/
+docs/latex/
+
+# Python (if using any Python scripts)
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore specific build artifacts but keep structure
+examples/*.bin
+examples/*.exe
+test/*/*.bin
+test/*/*.exe
+
+# Keep important directories but ignore contents
+!build/.gitkeep
+!bin/.gitkeep
+
+docs/doxygen/
+!docs/doxygen/.gitkeep
+
+venv/
