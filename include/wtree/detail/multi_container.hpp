@@ -1,3 +1,20 @@
+/*
+ * Copyright (c) 2026 Sebastián Pacheco Cáceres
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef _WTREE_MULTI_CONTAINER__H_
 #define _WTREE_MULTI_CONTAINER__H_
 
@@ -14,91 +31,98 @@ namespace WTreeLib {
  */
 template <typename Tree>
 class WTreeMultiContainer : public WTreeContainer<Tree> {
-  using super_type = WTreeContainer<Tree>;
-  using params_type = typename Tree::params_type;
+    static_assert(
+        false, "TODO: The multi-container features are not yet implemented.");
 
-public:
-  using typename super_type::allocator_type;
-  using typename super_type::const_iterator;
-  using typename super_type::iterator;
-  using typename super_type::key_compare;
-  using typename super_type::key_type;
-  using typename super_type::size_type;
-  using typename super_type::value_type;
+    using super_type = WTreeContainer<Tree>;
+    using params_type = typename Tree::params_type;
 
-  using super_type::kExactMatch;
-  using super_type::kMatchMask;
+  public:
+    using typename super_type::allocator_type;
+    using typename super_type::const_iterator;
+    using typename super_type::iterator;
+    using typename super_type::key_compare;
+    using typename super_type::key_type;
+    using typename super_type::size_type;
+    using typename super_type::value_type;
 
-  // Inherit default, copy, move constructors and assignment from base.
-  using super_type::super_type;
+    using super_type::kExactMatch;
+    using super_type::kMatchMask;
 
-  // Range constructor (multi: inserts all, duplicates allowed).
-  template <class InputIterator>
-  WTreeMultiContainer(InputIterator b, InputIterator e,
-                      const key_compare &comp = key_compare(),
-                      const allocator_type &alloc = allocator_type())
-      : super_type(comp, alloc) {
-    insert(b, e);
-  }
+    // Inherit default, copy, move constructors and assignment from base.
+    using super_type::super_type;
 
-  // === Lookup routines (multi-specific) ===
-
-  size_type count(const key_type &key) const {
-    // TODO: Implement count for multi container (distance(lb, ub)).
-    assert(0);
-    return 0;
-  }
-
-  // === Insertion routines ===
-  // Multi containers always succeed — return iterator (not pair).
-
-  iterator insert(const value_type &x) { return this->m_tree.insert_multi(x); }
-  template <typename P> iterator insert(P &&x) {
-    return this->m_tree.insert_multi(std::forward<P>(x));
-  }
-  iterator insert(value_type &&x) {
-    return this->m_tree.insert_multi(std::move(x));
-  }
-
-  iterator insert(const_iterator hint, const value_type &x) {
-    return this->m_tree.insert_multi(hint, x);
-  }
-  template <typename P> iterator insert(const_iterator hint, P &&x) {
-    return this->m_tree.insert_multi(hint, std::forward<P>(x));
-  }
-  iterator insert(const_iterator hint, value_type &&x) {
-    return this->m_tree.insert_multi(hint, std::move(x));
-  }
-
-  void insert(std::initializer_list<value_type> il) {
-    insert(il.begin(), il.end());
-  }
-  template <typename InputIterator>
-  void insert(InputIterator f, InputIterator l) {
-    for (; f != l; ++f) {
-      insert(*f);
+    // Range constructor (multi: inserts all, duplicates allowed).
+    template <class InputIterator>
+    WTreeMultiContainer(InputIterator b, InputIterator e,
+                        const key_compare &comp = key_compare(),
+                        const allocator_type &alloc = allocator_type())
+        : super_type(comp, alloc) {
+        insert(b, e);
     }
-  }
 
-  template <typename... Args> iterator emplace(Args &&...args) {
-    return this->m_tree.emplace_multi(std::forward<Args>(args)...);
-  }
+    // === Lookup routines (multi-specific) ===
 
-  template <typename... Args>
-  iterator emplace_hint(const_iterator hint, Args &&...args) {
-    return this->m_tree.emplace_hint_multi(hint, std::forward<Args>(args)...);
-  }
+    size_type count(const key_type &key) const {
+        // TODO: Implement count for multi container (distance(lb, ub)).
+        assert(0);
+        return 0;
+    }
 
-  // === Deletion routines (multi-specific) ===
+    // === Insertion routines ===
+    // Multi containers always succeed — return iterator (not pair).
 
-  using super_type::erase; // Inherit erase(iter) and erase(range) from base.
+    iterator insert(const value_type &x) {
+        return this->m_tree.insert_multi(x);
+    }
+    template <typename P> iterator insert(P &&x) {
+        return this->m_tree.insert_multi(std::forward<P>(x));
+    }
+    iterator insert(value_type &&x) {
+        return this->m_tree.insert_multi(std::move(x));
+    }
 
-  // Erases all elements matching key. Returns number of erased elements.
-  size_type erase(const key_type &key) {
-    // TODO: Implement erase-by-key for multi container (lb + ub + erase range).
-    assert(0);
-    return 0;
-  }
+    iterator insert(const_iterator hint, const value_type &x) {
+        return this->m_tree.insert_multi(hint, x);
+    }
+    template <typename P> iterator insert(const_iterator hint, P &&x) {
+        return this->m_tree.insert_multi(hint, std::forward<P>(x));
+    }
+    iterator insert(const_iterator hint, value_type &&x) {
+        return this->m_tree.insert_multi(hint, std::move(x));
+    }
+
+    void insert(std::initializer_list<value_type> il) {
+        insert(il.begin(), il.end());
+    }
+    template <typename InputIterator>
+    void insert(InputIterator f, InputIterator l) {
+        for(; f != l; ++f) {
+            insert(*f);
+        }
+    }
+
+    template <typename... Args> iterator emplace(Args &&...args) {
+        return this->m_tree.emplace_multi(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    iterator emplace_hint(const_iterator hint, Args &&...args) {
+        return this->m_tree.emplace_hint_multi(hint,
+                                               std::forward<Args>(args)...);
+    }
+
+    // === Deletion routines (multi-specific) ===
+
+    using super_type::erase; // Inherit erase(iter) and erase(range) from base.
+
+    // Erases all elements matching key. Returns number of erased elements.
+    size_type erase(const key_type &key) {
+        // TODO: Implement erase-by-key for multi container (lb + ub + erase
+        // range).
+        assert(0);
+        return 0;
+    }
 };
 
 } // namespace WTreeLib

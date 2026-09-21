@@ -32,9 +32,6 @@ endif()
 function(create_wtree_example EXAMPLE_NAME)
     add_executable(${EXAMPLE_NAME} ${EXAMPLE_NAME}.cpp)
     target_link_libraries(${EXAMPLE_NAME} PRIVATE WTree::Container)
-    target_compile_options(${EXAMPLE_NAME} PRIVATE
-        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wno-unused-but-set-variable>
-    )
     set_target_properties(${EXAMPLE_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${WTREE_EXAMPLE_OUTPUT_DIR}
         OUTPUT_NAME ${EXAMPLE_NAME}
@@ -42,8 +39,9 @@ function(create_wtree_example EXAMPLE_NAME)
 
     add_executable(${EXAMPLE_NAME}_debug ${EXAMPLE_NAME}.cpp)
     target_link_libraries(${EXAMPLE_NAME}_debug PRIVATE WTree::Container)
+    target_compile_definitions(${EXAMPLE_NAME}_debug PRIVATE DEBUG DBGVERBOSE)
     target_compile_options(${EXAMPLE_NAME}_debug PRIVATE
-        $<$<CXX_COMPILER_ID:GNU,Clang>:${WTREE_DBG_TARGET_FLAGS_GCC} -Wno-unused-but-set-variable>
+        $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:${WTREE_DBG_TARGET_FLAGS_GCC}>
         $<$<CXX_COMPILER_ID:MSVC>:${WTREE_DBG_TARGET_FLAGS_MSVC}>
     )
     set_target_properties(${EXAMPLE_NAME}_debug PROPERTIES
@@ -53,7 +51,7 @@ function(create_wtree_example EXAMPLE_NAME)
 endfunction()
 
 # === Register examples ===
-create_wtree_example(single_operations)
+create_wtree_example(set_example)
 create_wtree_example(map_example)
 create_wtree_example(complex_map_example)
 create_wtree_example(encapsulated_map_example)

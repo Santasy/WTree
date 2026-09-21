@@ -24,10 +24,6 @@
 **.log
 
 nlohmann_json.hpp
-others/cpp-btree/
-others/OWT*/
-others/ttree/
-others/m-ary-tree/
 **.dot
 *callgrind.out*
 

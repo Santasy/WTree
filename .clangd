@@ -1,0 +1,57 @@
+# .clangd configuration file
+# Place this in your project root or home directory (~/.config/clangd/.clangd)
+
+# Compilation database and indexing
+CompileFlags:
+  # Additional compiler flags
+  Add:
+    - "-std=c++20"
+    - "-Wall"
+    - "-Wextra"
+
+# Index configuration
+Index:
+  # Include .tpp files in indexing
+  Background: Build
+
+# Diagnostics configuration
+Diagnostics:
+  # Suppress warnings for template-heavy code if needed
+  Suppress:
+    - "unused-parameter"
+  ClangTidy:
+    Add:
+      - "readability-*"
+    Remove:
+      - "readability-braces-around-statements"
+      - "readability-isolate-declaration"
+      - "readability-magic-numbers"
+      - "readability-redundant-inline-specifier"
+      - "readability-identifier-length"
+      # - "readability-function-cognitive-complexity"
+
+# InlayHints (optional - shows type information)
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+# Hover information
+Hover:
+  ShowAKA: true
+
+# Completion settings
+Completion:
+  AllScopes: true
+
+# File extensions and patterns
+# Note: clangd automatically recognizes common C++ extensions
+# For .tpp files, they should be treated as C++ headers
+---
+# Additional configuration for specific file patterns
+If:
+  PathMatch: ".*\\.tpp$"
+CompileFlags:
+  Add:
+    - "-x"
+    - "c++-header" # Treat .tpp files as C++ headers

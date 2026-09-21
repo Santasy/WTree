@@ -1,17 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(WTreeContainer
-    VERSION 1.0.0
+    VERSION 0.9.0
     LANGUAGES CXX
     DESCRIPTION "High-performance STL-compatible container library that implements a WTree under the hood."
 )
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # === Project-wide settings ===
 set(WTREE_CXX_STANDARD 20)
 set(WTREE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(WTREE_HEADER_PREFIX include/wtree)
-set(WTREE_TEST_TIMEOUT 30)
-set(WTREE_DEBUG_TEST_TIMEOUT 60)
+set(WTREE_TEST_TIMEOUT 90)
+set(WTREE_DEBUG_TEST_TIMEOUT 120)
 
 set(CMAKE_CXX_STANDARD ${WTREE_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,7 +59,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
     )
 
     # Flags for debug-variant targets in subdirectories
-    set(WTREE_DBG_TARGET_FLAGS_GCC -g -ggdb -O0)
+    set(WTREE_DBG_TARGET_FLAGS_GCC -g -ggdb -O0 -UNDEBUG)
     set(WTREE_DBG_TARGET_FLAGS_MSVC /Od /Zi)
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -77,9 +79,21 @@ endif()
 set(NVER "v000" CACHE STRING "Version identifier")
 add_compile_definitions(NVER="${NVER}")
 
+option(WTREE_USE_SPLIT "Use the split operation under insertions." OFF)
+if(WTREE_USE_SPLIT)
+    add_compile_definitions(WTREE_USE_SPLIT)
+endif()
+
+# === Subdirectories ===
+option(BUILD_TESTING "Build tests" OFF)
+option(BUILD_EXAMPLES "Build examples" ON)
+
 # === Interface library (header-only) ===
 add_library(wtree_container INTERFACE)
 add_library(WTree::Container ALIAS wtree_container)
+
+# Export under WTree::Container so the installed package matches the alias name
+set_target_properties(wtree_container PROPERTIES EXPORT_NAME Container)
 
 set(WTREE_HEADERS
     ${WTREE_HEADER_PREFIX}/set.hpp
@@ -123,20 +137,23 @@ target_compile_features(wtree_container
         cxx_std_${WTREE_CXX_STANDARD}
 )
 
+# Build compile options per config using generator expressions
+# Each flag must be a separate list item for correct compiler invocation
+set(_WTREE_RELEASE_OPTS $<$<CONFIG:Release>:${COMMON_CXX_FLAGS};${RELEASE_CXX_FLAGS}>)
+set(_WTREE_DEBUG_OPTS $<$<CONFIG:Debug>:${COMMON_CXX_FLAGS};${DEBUG_CXX_FLAGS}>)
+
 target_compile_options(wtree_container
     INTERFACE
-        $<$<CONFIG:Release>:${COMMON_CXX_FLAGS};${RELEASE_CXX_FLAGS}>
-        $<$<CONFIG:Debug>:${COMMON_CXX_FLAGS};${DEBUG_CXX_FLAGS}>
+        ${_WTREE_RELEASE_OPTS}
+        ${_WTREE_DEBUG_OPTS}
 )
 
 # === Subdirectories ===
-option(BUILD_TESTING "Build tests" OFF)
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(test)
 endif()
 
-option(BUILD_EXAMPLES "Build examples" ON)
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()

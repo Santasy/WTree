@@ -1,0 +1,118 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cmake: configure debug",
+            "type": "shell",
+            "command": "cmake --preset debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "cmake: build debug",
+            "type": "shell",
+            "command": "cmake --build build/debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "cmake: configure analysis",
+            "type": "shell",
+            "command": "cmake --preset analysis",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "cmake: build analysis tests",
+            "type": "shell",
+            "command": "cmake --build build/debug-analysis --target run_analysis_tests",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "test: run core suites",
+            "type": "shell",
+            "command": "cmake --build build/debug --target run_core_tests",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "test: ctest all (debug)",
+            "type": "shell",
+            "command": "ctest --output-on-failure",
+            "options": {
+                "cwd": "${workspaceFolder}/build/debug"
+            },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "build: single debug test target",
+            "type": "shell",
+            "command": "cmake --build build/debug --target ${input:testTarget}_debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "valgrind: memcheck single test",
+            "type": "shell",
+            "command": "valgrind --tool=memcheck \\\n  --leak-check=full \\\n  --show-leak-kinds=definite \\\n  --num-callers=20 \\\n  --error-exitcode=1 \\\n  ./build/debug/bin/test/${input:testTarget}.dbg",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "format: clang-format all sources",
+            "type": "shell",
+            "command": "find . \\( -name \"*.cpp\" -o -name \"*.hpp\" -o -name \"*.tpp\" \\) -not -path \"./build/*\" | xargs clang-format -i",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testTarget",
+            "type": "pickString",
+            "description": "Pick the debug test target",
+            "options": [
+                "insert_rules_test",
+                "erase_rules_test",
+                "locator_test",
+                "unique_set_test",
+                "unique_map_test",
+                "container_semantics_test",
+                "node_size_test",
+                "manager_test",
+                "set_stress_test",
+                "map_stress_test",
+                "impl_coverage_test"
+            ]
+        }
+    ]
+}

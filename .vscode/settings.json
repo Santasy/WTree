@@ -1,0 +1,31 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.configureOnOpen": true,
+    "cmake.useCMakePresets": "always",
+    "cmake.copyCompileCommands": "${workspaceFolder}/build/debug/compile_commands.json",
+    "cmake.buildBeforeRun": true,
+    "cmake.cmakePath": "cmake",
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/include/wtree",
+        "${workspaceFolder}/include/wtree/detail",
+        "${workspaceFolder}/include/wtree/optional"
+    ],
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/debug/compile_commands.json",
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "files.associations": {
+        "*.tpp": "cpp"
+    },
+    "files.exclude": {
+        "**/build/**": true
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        "editor.formatOnSave": false
+    }
+}

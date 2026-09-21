@@ -1,0 +1,142 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug Build",
+            "description": "Debug configuration with tests and examples enabled",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TESTING": "ON",
+                "BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release Build",
+            "description": "Standard release configuration for examples",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_TESTING": "OFF",
+                "BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
+            "name": "release-optimized",
+            "displayName": "Optimized Release",
+            "description": "Highly optimized release build for production",
+            "binaryDir": "${sourceDir}/build/release-opt",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_TESTING": "OFF",
+                "BUILD_EXAMPLES": "OFF"
+            }
+        },
+        {
+            "name": "coverage",
+            "displayName": "Debug with Coverage",
+            "description": "Debug build with code coverage enabled",
+            "binaryDir": "${sourceDir}/build/coverage",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TESTING": "ON",
+                "BUILD_EXAMPLES": "ON",
+                "ENABLE_COVERAGE": "ON"
+            }
+        },
+        {
+            "name": "sanitize",
+            "displayName": "Debug with Sanitizers",
+            "description": "Debug build with AddressSanitizer + UndefinedBehaviorSanitizer",
+            "binaryDir": "${sourceDir}/build/sanitize",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TESTING": "ON",
+                "BUILD_EXAMPLES": "ON",
+                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+            }
+        },
+        {
+            "name": "analysis",
+            "displayName": "Debug with Analysis Tests",
+            "description": "Debug build with the opt-in analysis suites (stress + std-parity) enabled",
+            "binaryDir": "${sourceDir}/build/debug-analysis",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TESTING": "ON",
+                "BUILD_EXAMPLES": "ON",
+                "WTREE_BUILD_ANALYSIS_TESTS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "displayName": "Build Debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release",
+            "displayName": "Build Release"
+        },
+        {
+            "name": "release-optimized",
+            "configurePreset": "release-optimized",
+            "displayName": "Build Optimized Release"
+        },
+        {
+            "name": "coverage",
+            "configurePreset": "coverage",
+            "displayName": "Build Debug with Coverage"
+        },
+        {
+            "name": "sanitize",
+            "configurePreset": "sanitize",
+            "displayName": "Build Debug with Sanitizers"
+        },
+        {
+            "name": "analysis",
+            "configurePreset": "analysis",
+            "displayName": "Build Debug with Analysis Tests"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "displayName": "Test Debug",
+            "output": {
+                "outputOnFailure": true,
+                "verbosity": "verbose"
+            }
+        },
+        {
+            "name": "coverage",
+            "configurePreset": "coverage",
+            "displayName": "Test with Coverage",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "sanitize",
+            "configurePreset": "sanitize",
+            "displayName": "Test with Sanitizers",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "analysis",
+            "configurePreset": "analysis",
+            "displayName": "Test Analysis Suites",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}

@@ -1,5 +1,53 @@
 @PACKAGE_INIT@
 
+# WTree Container Config
+# ======================
+# 
+# This file provides configuration for the WTree Container library.
+# 
+# Usage:
+#   find_package(WTreeContainer REQUIRED)
+#   target_link_libraries(your_target PRIVATE WTree::Container)
+#
+# Components: None (header-only library)
+# 
+# Variables defined:
+#   WTreeContainer_FOUND        - True if the library was found
+#   WTreeContainer_VERSION      - Version of the library
+#   WTreeContainer_INCLUDE_DIRS - Include directories
+#
+# Targets defined:
+#   WTree::Container - Interface library target
+
+include(CMakeFindDependencyMacro)
+
+# Check for required compiler features
+if(NOT CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS 20)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+endif()
+
+# Set variables for compatibility
+set_and_check(WTreeContainer_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+set(WTreeContainer_INCLUDE_DIRS ${WTreeContainer_INCLUDE_DIR})
+set(WTreeContainer_VERSION "@PROJECT_VERSION@")
+
+# Import targets
 include("${CMAKE_CURRENT_LIST_DIR}/WTreeContainerTargets.cmake")
+
+# Verify targets exist
+if(NOT TARGET WTree::Container)
+    message(FATAL_ERROR "WTree::Container target not found")
+endif()
+
+# Set found flag
+set(WTreeContainer_FOUND TRUE)
+
+# Print status information
+if(NOT WTreeContainer_FIND_QUIETLY)
+    message(STATUS "Found WTreeContainer: ${WTreeContainer_VERSION}")
+    message(STATUS "  Include dirs: ${WTreeContainer_INCLUDE_DIRS}")
+    message(STATUS "  Targets: WTree::Container")
+endif()
 
 check_required_components(WTreeContainer)

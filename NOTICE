@@ -1,0 +1,13 @@
+WTree
+Copyright (c) 2026 Sebastián Pacheco Cáceres
+
+The software in include/wtree/ is licensed under the Apache License, Version
+2.0. See LICENSE for the full license text that applies to the library code.
+
+Design attribution: the WTree API surface is inspired by Google's cpp-btree
+(https://github.com/GerHobbelt/cpp-btree), distributed under the Apache
+License, Version 2.0. The library is an independent C++20 re-implementation
+of that interface.
+
+Portions outside include/wtree/ (examples/, test/) are licensed under the MIT
+License; see LICENSE-MIT.
