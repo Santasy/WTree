@@ -11,17 +11,18 @@
 # Core suites (label "core", run by `run_core_tests`):
 #   1. insert_rules_test       — minimal int-key insertion rules
 #   2. erase_rules_test        — minimal int-key erase rules
-#   3. locator_test            — WTreeLocator search/find
-#   4. unique_set_test         — deep unique-key set interface suite
-#   5. unique_map_test         — unique-key map delta suite (set-deltas only)
-#   6. container_semantics_test — copy/move/swap + balance policies (WTree+STD)
-#   7. node_size_test          — kTargetK vs node bytes vs field_type
-#   8. manager_test            — manager-layer relocations (movers + shifts)
+#   3. erase_str_map_test      — string-key map erase (SIGSEGV regression)
+#   4. locator_test            — WTreeLocator search/find
+#   5. unique_set_test         — deep unique-key set interface suite
+#   6. unique_map_test         — unique-key map delta suite (set-deltas only)
+#   7. container_semantics_test — copy/move/swap + balance policies (WTree+STD)
+#   8. node_size_test          — kTargetK vs node bytes vs field_type
+#   9. manager_test            — manager-layer relocations (movers + shifts)
 #
 # Analysis suites (label ANALYSIS_TEST, gated by WTREE_BUILD_ANALYSIS_TESTS):
-#   9. set_stress_test         — massive inserts, multi byte-size keys
-#  10. map_stress_test         — map volume at scale
-#  11. impl_coverage_test      — std-parity vs std::set/std::map
+#  10. set_stress_test         — massive inserts, multi byte-size keys
+#  11. map_stress_test         — map volume at scale
+#  12. impl_coverage_test      — std-parity vs std::set/std::map
 
 set(WTREE_TEST_OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin/test)
 
@@ -93,20 +94,23 @@ endfunction()
 create_wtree_test(insert_rules_test         insert_rules          core)
 create_wtree_test(erase_rules_test          erase_rules           core)
 
-# 3: Locator / search
+# 3: String-key map erase (crash regression on the delete path)
+create_wtree_test(erase_str_map_test        erase_str_map         core)
+
+# 4: Locator / search
 create_wtree_test(locator_test              locator               core)
 
-# 4-5: Unique-key containers — deep set suite, then map delta suite
+# 5-6: Unique-key containers — deep set suite, then map delta suite
 create_wtree_test(unique_set_test           unique_containers     core)
 create_wtree_test(unique_map_test           unique_containers     core)
 
-# 6: Container semantics (copy/move/swap — WTree vs STD) + balance policies
+# 7: Container semantics (copy/move/swap — WTree vs STD) + balance policies
 create_wtree_test(container_semantics_test  container_semantics   core)
 
-# 7: Node-size parametrization
+# 8: Node-size parametrization
 create_wtree_test(node_size_test            node_size             core)
 
-# 8: Manager-layer relocations (movers / in-node shifts)
+# 9: Manager-layer relocations (movers / in-node shifts)
 create_wtree_test(manager_test              manager               core)
 
 # === Register analysis suites (opt-in) ===
@@ -122,6 +126,7 @@ endif()
 set(ALL_DEBUG_TARGETS
     insert_rules_test_debug
     erase_rules_test_debug
+    erase_str_map_test_debug
     locator_test_debug
     unique_set_test_debug
     unique_map_test_debug
@@ -150,7 +155,7 @@ add_custom_target(run_all_tests
 add_custom_target(run_core_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L core --parallel $<IF:$<BOOL:${CMAKE_BUILD_PARALLEL_LEVEL}>,${CMAKE_BUILD_PARALLEL_LEVEL},4>
     DEPENDS ${ALL_DEBUG_TARGETS}
-    COMMENT "Running core WTree tests (rules, locator, unique set/map, container semantics, node size, manager relocations)"
+    COMMENT "Running core WTree tests (rules, string-key erase, locator, unique set/map, container semantics, node size, manager relocations)"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     VERBATIM
 )

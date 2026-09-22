@@ -135,10 +135,8 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
 
 template <typename Params>
 template <typename... Args>
-typename WTree<Params>::iterator
-WTree<Params>::emplace_hint_unique_key_args(const_iterator hint,
-                                            const key_type &key,
-                                            Args &&...args) {
+typename WTree<Params>::iterator WTree<Params>::emplace_hint_unique_key_args(
+    const_iterator hint, const key_type &key, Args &&...args) {
     (void)hint;
     // TODO(perf): leverage the hint for amortized-constant placement. For
     // now the hint is ignored and a full logarithmic search+insert is done,
@@ -205,9 +203,6 @@ Iterator WTree<P>::erase(Iterator &iter) {
             iterator child_node(iter.node->child(child_lower_bound - 1),
                                 child_lower_bound - 1);
 
-            child_node.node->move_value(child_node.node->size() - 1, iter.node,
-                                        child_lower_bound);
-
             m_locator.visit_path_to_greatest_leaf_value(child_node);
             if(child_node.node->is_internal()) {
                 // Node should be transform to a leaf.
@@ -220,6 +215,10 @@ Iterator WTree<P>::erase(Iterator &iter) {
                 m_manager.make_child_leaf_unchecked(ancestor, pos);
                 child_node.node = ancestor->child(pos);
             }
+
+            node_type *left_child = iter.node->child(child_lower_bound - 1);
+            left_child->move_value(left_child->size() - 1, iter.node,
+                                   child_lower_bound);
 
             m_manager.internal_move_greatest_upward(child_node);
             if(child_node.node->size() == 0) {
@@ -244,20 +243,21 @@ Iterator WTree<P>::erase(Iterator &iter) {
             // Cheap copy to use for descending.
             iterator child_iter(iter.node->child(child_lower_bound),
                                 child_lower_bound);
-            child_iter.node->move_value(0, iter.node, child_lower_bound);
 
             m_locator.visit_path_to_smallest_leaf_value(child_iter);
             if(child_iter.node->is_internal()) {
                 // Node should be transform to a leaf.
-                node_type *ancestor = child_iter.has_ascendant()
-                                          ? child_iter.ascendant()
-                                          : iter.node;
+                node_type *ancestor =
+                    child_iter.has_ascendant() ? child_iter.ascendant() : iter.node;
                 const field_type pos = child_iter.has_ascendant()
                                            ? child_iter.position()
                                            : child_lower_bound;
                 m_manager.make_child_leaf_unchecked(ancestor, pos);
                 child_iter.node = ancestor->child(pos);
             }
+
+            iter.node->child(child_lower_bound)->move_value(0, iter.node,
+                                                            child_lower_bound);
 
             m_manager.internal_move_smallest_upward(child_iter);
             if(child_iter.node->size() == 0) {
@@ -278,8 +278,8 @@ Iterator WTree<P>::erase(Iterator &iter) {
 
     iter.node->destroy_value(iter.index);
     m_manager.move_values_to_node(iter.node->fields.values + iter.index + 1,
-                                   iter.node->fields.values + iter.node->size(),
-                                   iter.node->fields.values + iter.index);
+                                  iter.node->fields.values + iter.node->size(),
+                                  iter.node->fields.values + iter.index);
     --iter.node->fields.size;
     m_manager.decrement_size();
     return iter;

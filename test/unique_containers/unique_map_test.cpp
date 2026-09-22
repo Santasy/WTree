@@ -378,7 +378,7 @@ void test_lifecycle_through_rebalancing() {
     }
 
     // Moves transfer the heap buffer, so value dtors fire for every moved-from
-// temporary as well; the no-leak invariant is the heap ledger alone.
+    // temporary as well; the no-leak invariant is the heap ledger alone.
     if(TrackedValue::allocation_balanced()) {
         results.pass("Lifecycle - heap ledger balanced after rebalancing");
     } else {
@@ -387,8 +387,8 @@ void test_lifecycle_through_rebalancing() {
                << TrackedValue::deallocations << " deallocs, "
                << TrackedValue::constructions << " ctors / "
                << TrackedValue::destructions << " dtors, "
-               << TrackedValue::copies << " copies / "
-               << TrackedValue::moves << " moves";
+               << TrackedValue::copies << " copies / " << TrackedValue::moves
+               << " moves";
         results.fail("Lifecycle - heap ledger balanced after rebalancing",
                      ledger.str());
     }
@@ -569,6 +569,49 @@ void test_realistic_graph_scenario() {
 }
 
 // ============================================================================
+// Comparison operators
+// ============================================================================
+
+void test_comparison_operators() {
+    MapSI a, b;
+    for(int i = 0; i < 5; ++i) {
+        a.emplace(i, "val");
+        b.emplace(i, "val");
+    }
+
+    if(!(a == b) || a != b) {
+        results.fail("Comparison - equal maps must compare equal");
+        return;
+    }
+
+    b.emplace(42, "extra");
+    if(a == b || !(a != b)) {
+        results.fail("Comparison - unequal maps must compare unequal");
+        return;
+    }
+    if(!(a < b)) {
+        results.fail("Comparison - prefix map must be less");
+        return;
+    }
+    if(!(a <= b) || !(b >= a) || !(b > a)) {
+        results.fail("Comparison - ordering operators");
+        return;
+    }
+    if(a > b || a >= b || b < a || b <= a) {
+        results.fail("Comparison - inverse ordering must fail");
+        return;
+    }
+
+    MapSI c{{0, "zzz"}, {1, "same"}, {2, "same"}, {3, "same"}, {4, "same"}};
+    if(!(c > a) || !(a < c) || c == a) {
+        results.fail("Comparison - lexicographical last-difference");
+        return;
+    }
+
+    results.pass("Comparison operators (==,!=,<,>,<=,>=)");
+}
+
+// ============================================================================
 // Clear and empty
 // ============================================================================
 
@@ -631,6 +674,8 @@ int main() {
     test_realistic_graph_scenario();
 
     test_clear();
+
+    test_comparison_operators();
 
     results.summary();
     return results.all_passed() ? EXIT_SUCCESS : EXIT_FAILURE;

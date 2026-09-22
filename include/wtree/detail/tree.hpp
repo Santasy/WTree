@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <sys/types.h>
 #include <type_traits>
@@ -320,6 +321,94 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
     bool is_empty() const { return size() == 0; }
 
+    size_type max_size() const noexcept {
+        return std::numeric_limits<size_type>::max();
+    }
+
+    // === Statistical accessors (mirror cpp-btree; byte accounting follows
+    // the WTreeMemoryInstrument model) ===
+    //
+    // NOTE: every nontrivial metric below walks the whole tree (one visit
+    // per node), so each call costs O(nodes). If you need several metrics at
+    // once, call collect_stats() once and read the returned node_stats fields,
+    // instead of requesting each metric individually.
+
+    // Cumulative node statistics gathered in a single traversal.
+    struct node_stats {
+        size_type leaf_nodes = 0;
+        size_type internal_nodes = 0;
+        size_type height = 0;
+        size_type keys = 0;
+        size_type unused_keycells = 0;
+    };
+
+    // Walks the entire tree once and returns all node statistics at once.
+    // Use this when more than one metric is needed: each single-metric
+    // accessor below re-traverses the tree, so collecting once and reading
+    // the struct fields is cheaper (O(nodes) instead of O(metrics * nodes)).
+    // Complexity: O(nodes) time, O(height) recursion stack (empty tree: O(1)).
+    node_stats collect_stats() const {
+        node_stats stats;
+        if(croot() != nullptr && !is_empty())
+            collect_stats(croot(), 0, stats);
+        return stats;
+    }
+
+    // The height of the tree. An empty tree has height 0.
+    // Complexity: O(nodes).
+    size_type height() const { return collect_stats().height; }
+
+    // The number of leaf, internal and total nodes used by the tree.
+    // Complexity: O(nodes).
+    size_type leaf_nodes() const { return collect_stats().leaf_nodes; }
+
+    size_type internal_nodes() const { return collect_stats().internal_nodes; }
+
+    size_type nodes() const {
+        const node_stats stats = collect_stats();
+        return stats.leaf_nodes + stats.internal_nodes;
+    }
+
+    // The total number of bytes used by the tree (object + all allocated
+    // node storage: base fields, key cells and internal pointer arrays).
+    // Complexity: O(nodes).
+    size_type bytes_used() const {
+        const node_stats stats = collect_stats();
+        const size_type n = stats.leaf_nodes + stats.internal_nodes;
+        return sizeof(self_type) + n * kBasefieldsBytes +
+               (stats.keys + stats.unused_keycells) * sizeof(value_type) +
+               stats.internal_nodes * (kTargetK - 1) * sizeof(void *);
+    }
+
+    // The average number of bytes used per value stored in the tree.
+    // Complexity: O(1) — compile-time formula, no traversal.
+    static double average_bytes_per_value() {
+        return sizeof(leaf_fields_type) / (kTargetK * 0.80);
+    }
+
+    // The fullness of the tree: real key-cell utilization (used over
+    // allocated cells), following the WTreeMemoryInstrument model.
+    // Complexity: O(nodes).
+    double fullness() const {
+        const node_stats stats = collect_stats();
+        const size_type allocated = stats.keys + stats.unused_keycells;
+        return allocated ? (double)stats.keys / (double)allocated : 0.0;
+    }
+
+    // The overhead of the tree structure in bytes per value: total
+    // structural bytes (base fields + wasted key cells + pointer arrays)
+    // divided by the number of values, following the WTreeMemoryInstrument
+    // model (its average_bytes_per_key).
+    // Complexity: O(nodes).
+    double overhead() const {
+        const node_stats stats = collect_stats();
+        const size_type n = stats.leaf_nodes + stats.internal_nodes;
+        const size_type total_bytes =
+            n * kBasefieldsBytes + stats.unused_keycells * sizeof(value_type) +
+            stats.internal_nodes * (kTargetK - 1) * sizeof(void *);
+        return stats.keys ? (double)total_bytes / (double)stats.keys : 0.0;
+    }
+
     bool node_bounds_key(const key_type &key, const node_type *node) const {
         assert(node != nullptr);
         return node->bounds_key(key, key_comp());
@@ -608,6 +697,24 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
             ++iter.index;
         }
         return iter;
+    }
+
+    // Recursively accumulate node statistics for the subtree at -node-.
+    void collect_stats(const node_type *node, size_type depth,
+                       node_stats &stats) const {
+        stats.height = std::max(stats.height, depth + 1);
+        stats.keys += node->size();
+        stats.unused_keycells += node->capacity() - node->size();
+        if(node->is_internal()) {
+            ++stats.internal_nodes;
+            for(field_type i = 0; i < kTargetK - 1; ++i) {
+                if(node->child(i) != nullptr) {
+                    collect_stats(node->child(i), depth + 1, stats);
+                }
+            }
+        } else {
+            ++stats.leaf_nodes;
+        }
     }
 
     // Inserts a value into the WTree immediately before iter. Requires that

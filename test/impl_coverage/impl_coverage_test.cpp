@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
                                    std::allocator<int>, kNodeBytes>;
 
     bool all_passed = true;
-    all_passed &= StdParity::run_all<WSetType, WMapType>();
+    all_passed &= StdParity::run_all<WSetType, WMapType, kNodeBytes>();
 
     if(all_passed) {
         test_correct("Impl-Coverage Test");

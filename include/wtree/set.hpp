@@ -62,19 +62,38 @@ template <typename Key, typename Compare = std::less<Key>,
           typename BalanceOptions = WTreeBalanceOptions<>>
 class set : public WTreeUniqueContainer<WTree<WTreeSetParams<
                 Key, Compare, Alloc, TargetNodeSize, true, BalanceOptions>>> {
+    using self_type = set<Key, Compare, Alloc, TargetNodeSize, BalanceOptions>;
     using super_type = WTreeUniqueContainer<WTree<WTreeSetParams<
         Key, Compare, Alloc, TargetNodeSize, true, BalanceOptions>>>;
 
   public:
     // Inherit all constructors from WTreeUniqueContainer.
     using super_type::super_type;
+
+    bool operator==(const self_type &other) const {
+        return this->size() == other.size() &&
+               std::equal(this->cbegin(), this->cend(), other.cbegin());
+    }
+
+    bool operator<(const self_type &other) const {
+        return std::lexicographical_compare(this->cbegin(), this->cend(),
+                                            other.cbegin(), other.cend());
+    }
+
+    bool operator!=(const self_type &other) const { return !(*this == other); }
+
+    bool operator>(const self_type &other) const { return other < *this; }
+
+    bool operator>=(const self_type &other) const { return !(*this < other); }
+
+    bool operator<=(const self_type &other) const { return !(other < *this); }
 };
 
 template <typename Key, typename Compare, typename Alloc, int TargetNodeSize,
           typename BalanceOptions>
 inline void swap(set<Key, Compare, Alloc, TargetNodeSize, BalanceOptions> &a,
-                 set<Key, Compare, Alloc, TargetNodeSize, BalanceOptions> &b)
-    noexcept(noexcept(a.swap(b))) {
+                 set<Key, Compare, Alloc, TargetNodeSize, BalanceOptions>
+                     &b) noexcept(noexcept(a.swap(b))) {
     a.swap(b);
 }
 

@@ -149,6 +149,7 @@ template <typename Tree> class WTreeContainer {
     WTreeContainer &operator=(WTreeContainer &&) noexcept = default;
 
     Tree *tree() noexcept { return &m_tree; };
+    const Tree *tree() const noexcept { return &m_tree; };
 
     void clear() noexcept { m_tree.clear(); }
 
@@ -220,30 +221,25 @@ template <typename Tree> class WTreeContainer {
     }
 
     // === WTree-specific stats ===
+    // Each single-metric accessor below traverses the whole tree (O(nodes));
+    // call collect_stats() once when several metrics are needed and read the
+    // returned node_stats fields instead.
+
+    using node_stats = typename Tree::node_stats;
+
+    node_stats collect_stats() const { return m_tree.collect_stats(); }
 
     static double average_bytes_per_value() {
         return Tree::average_bytes_per_value();
     }
     double fullness() const { return m_tree.fullness(); }
     double overhead() const { return m_tree.overhead(); }
-
-    // TODO: Some methods about stats.
-    // size_type height() const { return m_tree.height(); }
-    // size_type internal_nodes() const { return m_tree.internal_nodes(); }
-    // size_type leaf_nodes() const { return m_tree.leaf_nodes(); }
-    // size_type nodes() const { return m_tree.nodes(); }
-    // size_type bytes_used() const { return m_tree.bytes_used(); }
-
-    // TODO: Check == and != operators on a container.
-    // cpp-btree does it here.
+    size_type height() const { return m_tree.height(); }
+    size_type internal_nodes() const { return m_tree.internal_nodes(); }
+    size_type leaf_nodes() const { return m_tree.leaf_nodes(); }
+    size_type nodes() const { return m_tree.nodes(); }
+    size_type bytes_used() const { return m_tree.bytes_used(); }
 };
-
-template <typename Tree>
-inline std::ostream &operator<<(std::ostream &os,
-                                const WTreeContainer<Tree> &wt) {
-    wt.dump(os);
-    return os;
-}
 
 } // namespace WTreeLib
 

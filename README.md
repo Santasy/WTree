@@ -28,7 +28,7 @@ cmake --preset debug
 cmake --build build/debug
 ```
 
-Run the fast core suites (`insert_rules`, `erase_rules`, `locator`, `unique_set`, `unique_map`, `container_semantics`, `node_size`, `manager`):
+Run the fast core suites (`insert_rules`, `erase_rules`, `erase_str_map`, `locator`, `unique_set`, `unique_map`, `container_semantics`, `node_size`, `manager`):
 
 ```shell
 cd build/debug && ctest --output-on-failure

@@ -27,6 +27,10 @@
 
 namespace WTreeLib {
 
+// Forward-declared so the free dump/operator<< helpers can name the container
+// without pulling the core detail headers into this optional layer.
+template <typename Tree> class WTreeContainer;
+
 #define TypedPrinter(__T, __SIZE)                                              \
     WTreeLib::WTreePrinter<typename WTreeLib::set<                             \
         __T, std::less<__T>, std::allocator<__T>, __SIZE>::wtree_type>
@@ -63,6 +67,9 @@ template <typename WTreeType> class WTreePrinter {
 
     PrintOptions options;
 
+    // Output stream all printing methods write to (defaults to std::cout).
+    std::ostream *out_stream = &std::cout;
+
     //   public:
     WTreePrinter(const PrintOptions &opts = PrintOptions{}) : options(opts) {}
 
@@ -72,28 +79,28 @@ template <typename WTreeType> class WTreePrinter {
 
     void print_tree(const node_type *root,
                     const std::string &title = "WTree") const {
-        std::cout << "\n" << std::string(50, '=') << "\n";
-        std::cout << "Printing " << title;
+        *out_stream << "\n" << std::string(50, '=') << "\n";
+        *out_stream << "Printing " << title;
         if(root) {
-            std::cout << " [k:" << (int)node_type::kTargetK << "]";
+            *out_stream << " [k:" << (int)node_type::kTargetK << "]";
         }
-        std::cout << "\n" << std::string(50, '=') << "\n";
+        *out_stream << "\n" << std::string(50, '=') << "\n";
 
         if(root == nullptr) {
-            std::cout << "<empty tree>\n";
+            *out_stream << "<empty tree>\n";
             return;
         }
 
         print_node_improved(root, "", true, 0);
-        std::cout << "\n";
+        *out_stream << "\n";
     }
 
     void print_node(const node_type *node) const {
         if(node == nullptr) {
-            std::cout << "[[NULL]]\n";
+            *out_stream << "[[NULL]]\n";
             return;
         }
-        std::cout << format_node(node, 0) << "\n";
+        *out_stream << format_node(node, 0) << "\n";
         if(node->fields.is_internal) {
             print_children_improved(node, "", true, 0);
         }
@@ -101,13 +108,13 @@ template <typename WTreeType> class WTreePrinter {
 
     void print_compact(const node_type *root) const {
         if(root == nullptr) {
-            std::cout << "<empty>\n";
+            *out_stream << "<empty>\n";
             return;
         }
 
-        std::cout << "WTree: ";
+        *out_stream << "WTree: ";
         print_compact_node(root, 0);
-        std::cout << "\n";
+        *out_stream << "\n";
     }
 
     // Node-level convenience methods (assert correct container kind)
@@ -128,14 +135,14 @@ template <typename WTreeType> class WTreePrinter {
     void print_set_container(const ContainerType &container,
                              const std::string &title = "WTree Set") const {
         static_assert(!is_map_type, "Use print_map_container() for map WTrees");
-        print_tree(container.tree()->root(), title);
+        print_tree(container.tree()->croot(), title);
     }
 
     template <typename ContainerType>
     void print_map_container(const ContainerType &container,
                              const std::string &title = "WTree Map") const {
         static_assert(is_map_type, "Use print_set_container() for set WTrees");
-        print_tree(container.tree()->root(), title);
+        print_tree(container.tree()->croot(), title);
     }
 
     // Get the type name for display
@@ -235,11 +242,11 @@ template <typename WTreeType> class WTreePrinter {
 
     void print_node_improved(const node_type *node, const std::string &prefix,
                              bool is_last, int depth) const {
-        std::cout << prefix;
-        std::cout << (is_last ? "└── " : "├── ");
+        *out_stream << prefix;
+        *out_stream << (is_last ? "└── " : "├── ");
 
         if(node == nullptr) {
-            std::cout << "[[NULL]]\n";
+            *out_stream << "[[NULL]]\n";
             return;
         }
 
@@ -248,21 +255,21 @@ template <typename WTreeType> class WTreePrinter {
 
         if(options.color_output) {
             if(node->fields.is_internal) {
-                std::cout << "\033[1;34m"; // Blue for internal nodes
+                *out_stream << "\033[1;34m"; // Blue for internal nodes
             } else {
-                std::cout << "\033[1;32m"; // Green for leaf nodes
+                *out_stream << "\033[1;32m"; // Green for leaf nodes
             }
         }
 
-        std::cout << format_node(node, indent);
+        *out_stream << format_node(node, indent);
         if(options.color_output) {
-            std::cout << "\033[0m";
+            *out_stream << "\033[0m";
         }
 
-        std::cout << "\n";
+        *out_stream << "\n";
 
         if(options.vertical_spacing && depth > 0) {
-            std::cout << prefix << (is_last ? "    " : "│   ") << "\n";
+            *out_stream << prefix << (is_last ? "    " : "│   ") << "\n";
         }
 
         if(node->fields.is_internal) {
@@ -305,50 +312,50 @@ template <typename WTreeType> class WTreePrinter {
 
     void print_null_range(const std::string &prefix, int start, int end,
                           bool isLast) const {
-        std::cout << prefix << (isLast ? "└── " : "├── ");
+        *out_stream << prefix << (isLast ? "└── " : "├── ");
 
         if(options.color_output) {
-            std::cout << "\033[2;37m";
+            *out_stream << "\033[2;37m";
         }
 
         if(start == end) {
-            std::cout << "[[NULL #" << start << "]]";
+            *out_stream << "[[NULL #" << start << "]]";
         } else {
-            std::cout << "[[NULL #" << start << "-" << end << "]]";
+            *out_stream << "[[NULL #" << start << "-" << end << "]]";
         }
 
         if(options.color_output) {
-            std::cout << "\033[0m";
+            *out_stream << "\033[0m";
         }
 
-        std::cout << "\n";
+        *out_stream << "\n";
     }
 
     void print_compact_node(const node_type *node, int depth) const {
         if(node == nullptr) {
-            std::cout << "NULL ";
+            *out_stream << "NULL ";
             return;
         }
 
-        std::cout << "[";
+        *out_stream << "[";
         for(int i = 0; i < std::min(3, static_cast<int>(node->fields.size));
             ++i) {
             if(i > 0)
-                std::cout << ",";
-            std::cout << format_value_at(node, i);
+                *out_stream << ",";
+            *out_stream << format_value_at(node, i);
         }
         if(node->fields.size > 3) {
-            std::cout << "...+" << (node->fields.size - 3);
+            *out_stream << "...+" << (node->fields.size - 3);
         }
-        std::cout << "] ";
+        *out_stream << "] ";
 
         if(node->fields.is_internal && depth < 2) {
-            std::cout << "{ ";
+            *out_stream << "{ ";
             for(int i = 0;
                 i < std::min(2, static_cast<int>(node->fields.size) - 1); ++i) {
                 print_compact_node(node->fields.pointers[i], depth + 1);
             }
-            std::cout << "} ";
+            *out_stream << "} ";
         }
     }
 };
@@ -412,26 +419,59 @@ class PrintableContainer : public ContainerType {
 
 } // namespace WTreeLib
 
+// Free-function printing for WTree containers. Defined here instead of on
+// WTreeContainer so the core container headers stay free of the optional
+// printing machinery. Include this header to enable operator<< on a
+// WTreeLib::set / WTreeLib::map.
+namespace WTreeLib {
+
+template <typename Tree>
+inline void dump(std::ostream &os, const WTreeContainer<Tree> &wt) {
+    WTreePrinter<Tree> printer;
+    printer.out_stream = &os;
+    printer.print_tree(wt.tree()->croot(), "WTree Container");
+}
+
+template <typename Tree>
+inline std::ostream &operator<<(std::ostream &os,
+                                const WTreeContainer<Tree> &wt) {
+    dump(os, wt);
+    return os;
+}
+
+} // namespace WTreeLib
+
 // Convenience aliases - available when set.hpp / map.hpp are included before
 // this header (or after, as long as both are eventually included).
 // Use these in a translation unit that includes both headers.
+// The class templates are forward-declared here so the aliases compile even
+// when this header is parsed before the set/map definitions.
 #ifdef _WTREE_SET__H_
 namespace WTreeLib {
+template <typename Key, typename Compare, typename Alloc, int TargetNodeSize,
+          typename BalanceOptions>
+class set;
 template <typename Key, int TargetNodeSize = WTREE_TARGET_NODE_BYTES,
           typename Compare = std::less<Key>,
-          typename Alloc = std::allocator<Key>>
-using PrintableSet =
-    PrintableContainer<set<Key, Compare, Alloc, TargetNodeSize>>;
+          typename Alloc = std::allocator<Key>,
+          typename BalanceOptions = WTreeBalanceOptions<>>
+using PrintableSet = PrintableContainer<
+    set<Key, Compare, Alloc, TargetNodeSize, BalanceOptions>>;
 } // namespace WTreeLib
 #endif
 
 #ifdef _WTREE_MAP__H_
 namespace WTreeLib {
-template <
-    typename Key, typename Value, int TargetNodeSize = WTREE_TARGET_NODE_BYTES,
-    typename Compare = std::less<Key>, typename Alloc = std::allocator<Key>>
-using PrintableMap =
-    PrintableContainer<map<Key, Value, Compare, Alloc, TargetNodeSize>>;
+template <typename Key, typename Value, typename Compare, typename Alloc,
+          int TargetNodeSize, bool Unique, typename BalanceOptions>
+class map;
+template <typename Key, typename Value,
+          int TargetNodeSize = WTREE_TARGET_NODE_BYTES,
+          typename Compare = std::less<Key>,
+          typename Alloc = std::allocator<std::pair<const Key, Value>>,
+          bool Unique = true, typename BalanceOptions = WTreeBalanceOptions<>>
+using PrintableMap = PrintableContainer<
+    map<Key, Value, Compare, Alloc, TargetNodeSize, Unique, BalanceOptions>>;
 } // namespace WTreeLib
 #endif
 

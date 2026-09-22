@@ -103,6 +103,7 @@
             "options": [
                 "insert_rules_test",
                 "erase_rules_test",
+                "erase_str_map_test",
                 "locator_test",
                 "unique_set_test",
                 "unique_map_test",

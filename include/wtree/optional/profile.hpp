@@ -23,6 +23,21 @@
 namespace WTreeLib {
 
 struct WTreeMemoryInstrument {
+    unsigned long keys = 0;
+    unsigned long num_nodes = 0;
+    unsigned long height = 0;
+    unsigned long num_internals =
+        0;                        // Number of internal nodes (with descendents)
+    unsigned long num_leaves = 0; // Number of leaves nodes (no descendents)
+    unsigned long unused_keycells = 0; // Unused cells in vector of keys
+    unsigned long unused_ptrcells = 0; // Unused cells in vector of pointers
+
+    unsigned long total_bytes =
+        0; // Bytes of overhead aside (key-value)s memory.
+
+    double average_bytes_per_key = 0; // Calculated as total_bytes/keys
+    double connectivity = 0.0;
+
     struct Level {
         unsigned int level = 0;
         unsigned long keys = 0;
@@ -41,21 +56,6 @@ struct WTreeMemoryInstrument {
         };
     };
     std::vector<Level> levels;
-
-    unsigned long keys = 0;
-    unsigned long num_nodes = 0;
-    unsigned long height = 0;
-    unsigned long num_internals =
-        0;                        // Number of internal nodes (with descendents)
-    unsigned long num_leaves = 0; // Number of leaves nodes (no descendents)
-    unsigned long unused_keycells = 0; // Unused cells in vector of keys
-    unsigned long unused_ptrcells = 0; // Unused cells in vector of pointers
-
-    unsigned long total_bytes =
-        0; // Bytes of overhead aside (key-value)s memory.
-
-    double average_bytes_per_key = 0; // Calculated as total_bytes/keys
-    double connectivity = 0.0;
 
     template <typename T, class NODE> void evaluate() {
         const uint k_value = NODE::kTargetK;
@@ -125,10 +125,16 @@ struct WTreeMemoryInstrument {
 
     void clean() {
         levels.clear();
-        std::fill(&keys,
-                  &keys + sizeof(WTreeMemoryInstrument) -
-                      sizeof(std::vector<Level>),
-                  0);
+        keys = 0;
+        num_nodes = 0;
+        height = 0;
+        num_internals = 0;
+        num_leaves = 0;
+        unused_keycells = 0;
+        unused_ptrcells = 0;
+        total_bytes = 0;
+        average_bytes_per_key = 0;
+        connectivity = 0.0;
     };
 };
 

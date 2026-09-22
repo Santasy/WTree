@@ -38,6 +38,7 @@
 
 #include <cstdlib>
 #include <random>
+#include <string>
 
 using namespace std;
 using namespace WTreeLib;
@@ -102,7 +103,7 @@ void test_search_true_positives() {
                          "count(" + to_string(v) + ") != 1");
             return;
         }
-            }
+    }
     results.pass("Search true positives (find/count)");
 }
 
@@ -216,7 +217,7 @@ void test_erase_by_iterator_and_range() {
         results.fail("Erase by iterator - size");
         return;
     }
-auto first = storage.find(10);
+    auto first = storage.find(10);
     auto last = storage.find(15);
     storage.erase(first, last); // removes [10, 15): 10..14
     if(storage.find(10) != storage.end() || storage.find(14) != storage.end() ||
@@ -338,7 +339,8 @@ void test_bounds() {
         results.fail("upper_bound - exact key");
         return;
     }
-    if(*storage.upper_bound(18) != 0 && storage.upper_bound(18) != storage.end()) {
+    if(*storage.upper_bound(18) != 0 &&
+       storage.upper_bound(18) != storage.end()) {
         results.fail("upper_bound - last key returns end()");
         return;
     }
@@ -363,6 +365,83 @@ void test_bounds() {
         return;
     }
     results.pass("Bounds (lower_bound/upper_bound/equal_range)");
+}
+
+// Considering the fact that string keys are non-trivially-copyable and
+// heap-backed (post-SSO), exercising the placement-new relocation paths and
+// the std::less<std::string> compare_to adapter inside bounds.
+void test_string_keys() {
+    using StringSet = WTreeLib::set<std::string>;
+    StringSet storage;
+    std::set<std::string> ref;
+
+    for(int i = 0; i < 40; ++i) {
+        const std::string k = "k" + std::to_string(i * 7); // sparse, distinct
+        if(storage.insert(k).second != ref.insert(k).second) {
+            results.fail("string keys - insert parity at " + std::to_string(i));
+            return;
+        }
+    }
+
+    for(int i = 0; i < 40; ++i) {
+        const std::string probe = "k" + std::to_string(i * 3);
+        auto wlb = storage.lower_bound(probe);
+        auto rlb = ref.lower_bound(probe);
+        if((wlb == storage.end()) != (rlb == ref.end()) ||
+           (wlb != storage.end() && *wlb != *rlb)) {
+            results.fail("string keys - lower_bound at '" + probe + "'");
+            return;
+        }
+        auto wub = storage.upper_bound(probe);
+        auto rub = ref.upper_bound(probe);
+        if((wub == storage.end()) != (rub == ref.end()) ||
+           (wub != storage.end() && *wub != *rub)) {
+            results.fail("string keys - upper_bound at '" + probe + "'");
+            return;
+        }
+        if(!storage.contains(probe) != !ref.count(probe)) {
+            results.fail("string keys - contains at '" + probe + "'");
+            return;
+        }
+    }
+
+    for(int i = 0; i < 40; i += 3) {
+        const std::string k = "k" + std::to_string(i * 7);
+        storage.erase(k);
+        ref.erase(k);
+    }
+    if(storage.size() != ref.size()) {
+        results.fail("string keys - size after erase");
+        return;
+    }
+    results.pass("string keys");
+
+    // Also target the non-default (small) node budget so slides/splits fire
+    // on every relocation, and re-run insert+erase+search sanity.
+    using SmallNodeSet = WTreeLib::set<std::string, std::less<std::string>,
+                                       std::allocator<std::string>, 128>;
+    SmallNodeSet small;
+    std::set<std::string> sref;
+    for(int i = 0; i < 60; ++i) {
+        const std::string k = "s" + std::to_string(i);
+        small.insert(k);
+        sref.insert(k);
+    }
+    for(int i = 0; i < 60; i += 2) {
+        const std::string k = "s" + std::to_string(i);
+        small.erase(k);
+        sref.erase(k);
+    }
+    if(small.size() != sref.size()) {
+        results.fail("string keys - small node erase parity");
+        return;
+    }
+    const std::string q = "s51";
+    if(small.lower_bound(q) == small.end() || *small.lower_bound(q) != q) {
+        results.fail("string keys - small node lower_bound");
+        return;
+    }
+    results.pass("string keys (small node budget)");
 }
 
 void test_hint_insert() {
@@ -400,8 +479,8 @@ void test_swap() {
 
     a.swap(b);
 
-    if(a.find(100) != a.end() && a.find(0) == a.end() && b.find(0) != b.end() && b.find(100) == b.end() &&
-       a.size() == 5 && b.size() == 5) {
+    if(a.find(100) != a.end() && a.find(0) == a.end() && b.find(0) != b.end() &&
+       b.find(100) == b.end() && a.size() == 5 && b.size() == 5) {
         results.pass("Swap - contents exchanged");
     } else {
         results.fail("Swap - contents not exchanged");
@@ -414,6 +493,106 @@ void test_swap() {
     } else {
         results.fail("Swap - free function");
     }
+}
+
+void test_comparison_operators() {
+    BaseSet a, b;
+    for(int i = 0; i < 5; ++i) {
+        a.insert(i);
+        b.insert(i);
+    }
+
+    if(!(a == b) || a != b) {
+        results.fail("Comparison - equal sets must compare equal");
+        return;
+    }
+
+    b.insert(42);
+    if(a == b || !(a != b)) {
+        results.fail("Comparison - unequal sets must compare unequal");
+        return;
+    }
+    if(!(a < b)) {
+        results.fail("Comparison - prefix set must be less");
+        return;
+    }
+    if(!(a <= b) || !(b >= a) || !(b > a)) {
+        results.fail("Comparison - ordering operators");
+        return;
+    }
+    if(a > b || a >= b || b < a || b <= a) {
+        results.fail("Comparison - inverse ordering must fail");
+        return;
+    }
+
+    BaseSet c{0, 1, 5, 3, 2};
+    if(!(c > a) || !(a < c) || c == a) {
+        results.fail("Comparison - lexicographical first-difference");
+        return;
+    }
+
+    results.pass("Comparison operators (==,!=,<,>,<=,>=)");
+}
+
+void test_stats_and_dump() {
+    BaseSet s;
+    for(int i = 0; i < 200; ++i) {
+        s.insert(i * 7);
+    }
+
+    const auto nodes = s.nodes();
+    if(s.max_size() == 0 || s.size() > s.max_size()) {
+        results.fail("Stats - max_size");
+        return;
+    }
+    if(s.leaf_nodes() + s.internal_nodes() != nodes || nodes == 0) {
+        results.fail("Stats - nodes/leaf/internal accounting");
+        return;
+    }
+    if(s.height() < 1) {
+        results.fail("Stats - height on non-empty set");
+        return;
+    }
+    if(s.bytes_used() < s.size() * sizeof(decltype(s)::value_type)) {
+        results.fail("Stats - bytes_used too small");
+        return;
+    }
+    if(s.fullness() <= 0.0 || s.fullness() > 1.0) {
+        results.fail("Stats - fullness out of (0, 1]");
+        return;
+    }
+    if(s.average_bytes_per_value() <= 0.0) {
+        results.fail("Stats - average_bytes_per_value");
+        return;
+    }
+    if(s.overhead() < 0.0) {
+        results.fail("Stats - overhead");
+        return;
+    }
+
+    const auto stats = s.collect_stats();
+    if(stats.height < 1 || stats.height != s.height()) {
+        results.fail("Stats - collect_stats height");
+        return;
+    }
+    if(stats.leaf_nodes + stats.internal_nodes != nodes) {
+        results.fail("Stats - collect_stats node accounting");
+        return;
+    }
+    if(stats.keys != s.size() || stats.unused_keycells == 0) {
+        results.fail("Stats - collect_stats key cells");
+        return;
+    }
+
+    std::ostringstream oss;
+    oss << s;
+    if(oss.tellp() <= 0) {
+        results.fail("Dump - operator<< produced no output");
+        return;
+    }
+
+    results.pass("Stats (max_size, nodes, height, bytes_used, fullness, "
+                 "overhead) and dump(operator<<)");
 }
 
 // ============================================================================
@@ -437,8 +616,11 @@ int main() {
     test_reverse_iteration();
     test_begin_end_on_empty();
     test_bounds();
+    test_string_keys();
     test_hint_insert();
     test_swap();
+    test_comparison_operators();
+    test_stats_and_dump();
 
     results.summary();
     return results.all_passed() ? EXIT_SUCCESS : EXIT_FAILURE;

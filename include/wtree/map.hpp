@@ -152,7 +152,8 @@ class WTreeMapContainer : public WTreeUniqueContainer<WTree> {
     template <typename M>
     mapped_type &insert_or_assign(key_type &&key, M &&obj) {
         std::pair<iterator, bool> res = this->tree()->emplace_unique_key_args(
-            key, std::piecewise_construct, std::forward_as_tuple(std::move(key)),
+            key, std::piecewise_construct,
+            std::forward_as_tuple(std::move(key)),
             std::forward_as_tuple(std::forward<M>(obj)));
         if(!res.second)
             res.first->second = std::forward<M>(obj);
@@ -198,7 +199,7 @@ class map : public WTreeMapContainer<
 
     bool operator!=(const self_type &other) const { return !(*this == other); }
 
-    bool operator>(const self_type &other) const { return other < this; }
+    bool operator>(const self_type &other) const { return other < *this; }
 
     bool operator>=(const self_type &other) const { return !(*this < other); }
 
@@ -207,10 +208,10 @@ class map : public WTreeMapContainer<
 
 template <typename Key, typename Value, typename Compare, typename Alloc,
           int TargetNodeSize, bool Unique, typename BalanceOptions>
-inline void swap(map<Key, Value, Compare, Alloc, TargetNodeSize, Unique,
-                     BalanceOptions> &a,
-                 map<Key, Value, Compare, Alloc, TargetNodeSize, Unique,
-                     BalanceOptions> &b) noexcept(noexcept(a.swap(b))) {
+inline void
+swap(map<Key, Value, Compare, Alloc, TargetNodeSize, Unique, BalanceOptions> &a,
+     map<Key, Value, Compare, Alloc, TargetNodeSize, Unique, BalanceOptions>
+         &b) noexcept(noexcept(a.swap(b))) {
     a.swap(b);
 }
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(WTreeContainer
-    VERSION 0.9.0
+    VERSION 0.10.0
     LANGUAGES CXX
     DESCRIPTION "High-performance STL-compatible container library that implements a WTree under the hood."
 )

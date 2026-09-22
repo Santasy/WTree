@@ -150,6 +150,88 @@ template <typename SetC, typename MapC> bool check_bounds_parity() {
 }
 
 // ---------------------------------------------------------------------------
+// String-key differential: non-trivially-copyable keys exercise the node
+// movers (slide/split relocations) with real move semantics, and the
+// compare_to adapter path used by std::less<std::string>.
+// ---------------------------------------------------------------------------
+
+template <int NodeBytes> bool check_string_key_parity() {
+    const char *name =
+        "string-key parity (insert/lower/upper/equal_range/count/erase vs std)";
+    const char *alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+    using WStrSet = WTreeLib::set<std::string, std::less<std::string>,
+                                  std::allocator<std::string>, NodeBytes>;
+
+    std::mt19937 rng(707u);
+    for(int trial = 0; trial < 20; ++trial) {
+        WStrSet ws;
+        std::set<std::string> rs;
+        const int n = 300 + static_cast<int>(rng() % 1500);
+
+        std::vector<std::string> keys;
+        keys.reserve(static_cast<size_t>(n));
+        for(int i = 0; i < n; ++i) {
+            std::string v;
+            const int len = 1 + static_cast<int>(rng() % 16);
+            for(int j = 0; j < len; ++j)
+                v += alphabet[rng() % 36];
+            keys.push_back(v);
+            ws.insert(v);
+            rs.insert(v);
+        }
+        if(ws.size() != rs.size())
+            return detail::verdict(false, name), false;
+
+        for(int k = 0; k < 200; ++k) {
+            std::string q;
+            const int len = static_cast<int>(rng() % 20);
+            for(int j = 0; j < len; ++j)
+                q += alphabet[rng() % 36];
+
+            auto wlb = ws.lower_bound(q);
+            auto rlb = rs.lower_bound(q);
+            if((wlb == ws.end()) != (rlb == rs.end()) ||
+               (wlb != ws.end() && *wlb != *rlb))
+                return detail::verdict(false, name), false;
+
+            auto wub = ws.upper_bound(q);
+            auto rub = rs.upper_bound(q);
+            if((wub == ws.end()) != (rub == rs.end()) ||
+               (wub != ws.end() && *wub != *rub))
+                return detail::verdict(false, name), false;
+
+            auto wer = ws.equal_range(q);
+            auto rer = rs.equal_range(q);
+            const bool wempty = (wer.first == wer.second);
+            const bool rempty = (rer.first == rer.second);
+            if(wempty != rempty)
+                return detail::verdict(false, name), false;
+            if(!wempty &&
+               (*wer.first != *rer.first || *wer.second != *rer.second))
+                return detail::verdict(false, name), false;
+
+            if(ws.count(q) != rs.count(q))
+                return detail::verdict(false, name), false;
+        }
+
+        if(!detail::range_equal(ws.cbegin(), ws.cend(), rs.begin(), rs.end()))
+            return detail::verdict(false, name), false;
+
+        for(int d = 0; d < static_cast<int>(keys.size()) / 2; ++d) {
+            const std::string &v = keys[rng() % keys.size()];
+            ws.erase(v);
+            rs.erase(v);
+        }
+        if(ws.size() != rs.size())
+            return detail::verdict(false, name), false;
+        if(!detail::range_equal(ws.cbegin(), ws.cend(), rs.begin(), rs.end()))
+            return detail::verdict(false, name), false;
+    }
+
+    return detail::verdict(true, name), true;
+}
+
+// ---------------------------------------------------------------------------
 // Range + initializer-list construction and insertion vs std.
 // ---------------------------------------------------------------------------
 
@@ -317,9 +399,10 @@ template <typename MapC> bool check_insert_or_assign() {
 // Run the full high-priority parity battery.
 // ---------------------------------------------------------------------------
 
-template <typename SetC, typename MapC> bool run_all() {
+template <typename SetC, typename MapC, int StringNodeBytes> bool run_all() {
     bool ok = true;
     ok &= check_bounds_parity<SetC, MapC>();
+    ok &= check_string_key_parity<StringNodeBytes>();
     ok &= check_range_and_init_list<SetC, MapC>();
     ok &= check_hint_insert<SetC, MapC>();
     ok &= check_swap_parity<SetC, MapC>();
