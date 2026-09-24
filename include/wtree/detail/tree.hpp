@@ -548,9 +548,8 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
     // Two-argument emplace for maps: first arg is the key.
     template <typename First, typename Second>
-    typename std::enable_if<
-        WTreeCanExtractMapKey<First, key_type, value_type>::value,
-        std::pair<iterator, bool>>::type
+    std::enable_if<WTreeCanExtractMapKey<First, key_type, value_type>::value,
+                   std::pair<iterator, bool>>::type
     emplace_unique(First &&f, Second &&s) {
         return emplace_unique_key_args(f, std::forward<First>(f),
                                        std::forward<Second>(s));
@@ -590,9 +589,8 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
     // Two-argument emplace with hint for maps: first arg is the key.
     template <typename First, typename Second>
-    typename std::enable_if<
-        WTreeCanExtractMapKey<First, key_type, value_type>::value,
-        iterator>::type
+    std::enable_if<WTreeCanExtractMapKey<First, key_type, value_type>::value,
+                   iterator>::type
     emplace_hint_unique(const_iterator hint, First &&f, Second &&s) {
         return emplace_hint_unique_key_args(hint, f, std::forward<First>(f),
                                             std::forward<Second>(s));
@@ -623,7 +621,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     }
 
     template <typename P,
-              typename = typename std::enable_if<!std::is_same<
+              typename = std::enable_if<!std::is_same<
                   typename std::remove_const<
                       typename std::remove_reference<P>::type>::type,
                   value_type>::value>::type>
@@ -631,7 +629,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         return emplace_unique(std::forward<P>(x));
     }
     template <typename P,
-              typename = typename std::enable_if<!std::is_same<
+              typename = std::enable_if<!std::is_same<
                   typename std::remove_const<
                       typename std::remove_reference<P>::type>::type,
                   value_type>::value>::type>
@@ -675,7 +673,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
                                            std::move(v));
     }
     template <typename P,
-              typename = typename std::enable_if<!std::is_same<
+              typename = std::enable_if<!std::is_same<
                   typename std::remove_const<
                       typename std::remove_reference<P>::type>::type,
                   value_type>::value>::type>
@@ -683,7 +681,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         return emplace_multi(std::forward<P>(x));
     }
     template <typename P,
-              typename = typename std::enable_if<!std::is_same<
+              typename = std::enable_if<!std::is_same<
                   typename std::remove_const<
                       typename std::remove_reference<P>::type>::type,
                   value_type>::value>::type>

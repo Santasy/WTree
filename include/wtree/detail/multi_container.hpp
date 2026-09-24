@@ -27,7 +27,8 @@ namespace WTreeLib {
 /**
  * A common base class for wtree::multiset and wtree::multimap.
  * @tparam Tree A @ref WTree "WTree<Params>" instantiation, where Params is
- *         @ref WTreeSetParams or @ref WTreeMapParams with Unique == false.
+ *         @ref WTreeLib::WTreeSetParams "WTreeSetParams" or @ref
+ *         WTreeLib::WTreeMapParams "WTreeMapParams" with Unique == false.
  */
 template <typename Tree>
 class WTreeMultiContainer : public WTreeContainer<Tree> {

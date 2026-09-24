@@ -46,6 +46,8 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
     using value_type = wtree_type::value_type;
     using stats_type = wtree_type::node_stats;
 
+    static constexpr size_type kBasefieldsBytes = node_type::kBasefieldsBytes;
+
     /**
      * @brief Per-level statistics of the referenced tree.
      * @details Counts the keys, nodes and pointer cells present at one level,
@@ -66,14 +68,14 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
             size_t leaves_keycells;
             if(this->height == 0) { // Root is a special case.
                 leaves_keycells =
-                    this->keys < this->kTargetK ? 0 : this->keys_in_leaves();
+                    this->keys < this->target_k ? 0 : this->keys_in_leaves();
             } else {
                 leaves_keycells = this->keys_in_leaves();
             }
             const size_type internals_memory =
                 this->internal_nodes * sizeof(node_type);
             const size_type leaves_memory =
-                (this->leaf_nodes * this->kBasefieldsBytes) +
+                (this->leaf_nodes * kBasefieldsBytes) +
                 (leaves_keycells * sizeof(value_type));
             return internals_memory + leaves_memory;
         }
@@ -113,7 +115,7 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
      * @brief Finalizes the per-level records from the accumulated counts.
      */
     void evaluate() {
-        this->height = levels.size();
+        this->height = levels.size() - 1;
         for(size_t i = 0; i < levels.size(); ++i) {
             Level &level = levels[i];
             assert(level.height == i);
@@ -155,19 +157,19 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
             // Reduced some metrics for the levels.
             const Level &level = levels[i];
             oline += "\t{";
-            oline += format("\"height\": {:3},", this->height);
-            oline += format("\"keys\": {:10},", this->keys);
-            oline += format("\"leaves\": {:4},", this->leaf_nodes);
-            oline += format("\"internals\": {:4},\n", this->internal_nodes);
+            oline += format("\"height\": {:3},", level.height);
+            oline += format("\"keys\": {:10},", level.keys);
+            oline += format("\"leaves\": {:4},", level.leaf_nodes);
+            oline += format("\"internals\": {:4},\n", level.internal_nodes);
             oline +=
-                format("\"unused_keycells\": {:6},", this->unused_keycells);
+                format("\"unused_keycells\": {:6},", level.unused_keycells);
             oline +=
-                format("\"unused_ptrcells\": {:6},", this->unused_pointers);
+                format("\"unused_ptrcells\": {:6},", level.unused_pointers);
             oline +=
-                format("\"total_overhead\": {:10},", this->total_overhead());
-            oline += format("\"overhead\": {:f},\n", this->overhead());
-            oline += format("\"fullness\": {:f},", this->fullness());
-            oline += format("\"occupancy\": {:f}", this->occupancy());
+                format("\"total_overhead\": {:10},", level.total_overhead());
+            oline += format("\"overhead\": {:f},\n", level.overhead());
+            oline += format("\"fullness\": {:f},", level.fullness());
+            oline += format("\"occupancy\": {:f}", level.occupancy());
             oline += (i < last_level) ? "},\n" : "}\n";
         }
         oline += "]";
@@ -176,7 +178,6 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
 
   private:
     void evaluate_level(Level &level) {
-        this->height += level.height;
         this->keys += level.keys;
         this->leaf_nodes += level.leaf_nodes;
         this->internal_nodes += level.internal_nodes;
@@ -282,7 +283,6 @@ template <typename Params> struct WTreeProfiler {
                                   ulong depth = 0) {
         assert(node != nullptr);
         const uint k_value = node_type::kTargetK;
-        reg.ensure_level_exists(depth);
 
         level_type &level = *reg.ensure_level_exists(depth);
         level.keys += node->size();
