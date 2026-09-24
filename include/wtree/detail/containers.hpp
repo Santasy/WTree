@@ -224,21 +224,24 @@ template <typename Tree> class WTreeContainer {
     // Each single-metric accessor below traverses the whole tree (O(nodes));
     // call collect_stats() once when several metrics are needed and read the
     // returned node_stats fields instead.
+    // Follow to tree.hpp for more details.
 
-    using node_stats = typename Tree::node_stats;
+    using node_stats = Tree::node_stats;
 
     node_stats collect_stats() const { return m_tree.collect_stats(); }
 
-    static double average_bytes_per_value() {
-        return Tree::average_bytes_per_value();
-    }
-    double fullness() const { return m_tree.fullness(); }
-    double overhead() const { return m_tree.overhead(); }
     size_type height() const { return m_tree.height(); }
-    size_type internal_nodes() const { return m_tree.internal_nodes(); }
     size_type leaf_nodes() const { return m_tree.leaf_nodes(); }
+    size_type internal_nodes() const { return m_tree.internal_nodes(); }
     size_type nodes() const { return m_tree.nodes(); }
     size_type bytes_used() const { return m_tree.bytes_used(); }
+    double average_bytes_per_value() {
+        return m_tree.average_bytes_per_value();
+    }
+    double total_overhead() const { return m_tree.total_overhead(); }
+    double overhead() const { return m_tree.overhead(); }
+    double fullness() const { return m_tree.fullness(); }
+    double occupancy() const { return m_tree.occupancy(); }
 };
 
 } // namespace WTreeLib

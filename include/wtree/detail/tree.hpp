@@ -48,7 +48,8 @@ namespace WTreeLib {
 template <typename Params>
 class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     // Used Empty Base Optimization (EBO) for the key_compare struct.
-    typedef WTree<Params> self_type;
+    using self_type = WTree<Params>;
+    using wtree_type = WTree<Params>;
     using Aliases = WTreeTypeAliases<Params>;
 
   public:
@@ -325,89 +326,189 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         return std::numeric_limits<size_type>::max();
     }
 
-    // === Statistical accessors (mirror cpp-btree; byte accounting follows
-    // the WTreeMemoryInstrument model) ===
+    // === Statistical accessors ===
     //
     // NOTE: every nontrivial metric below walks the whole tree (one visit
     // per node), so each call costs O(nodes). If you need several metrics at
     // once, call collect_stats() once and read the returned node_stats fields,
     // instead of requesting each metric individually.
+    // For these same metrics plus per-level breakdowns and occupancy, see
+    // the WTreeMemoryInstrument debug utility (optional/profile.hpp), filled
+    // via WTreeProfiler::check_statistics.
 
-    // Cumulative node statistics gathered in a single traversal.
-    struct node_stats {
-        size_type leaf_nodes = 0;
-        size_type internal_nodes = 0;
+    /**
+     * @brief Cumulative node statistics gathered in a single traversal.
+     * @details Only valid on a traversed instance: create one via
+     * collect_stats(), then read the fields or call the metric methods.
+     * Each metric is mirrored on the tree itself, where every call
+     * re-traverses and builds a fresh instance for the single query.
+     */
+    class node_stats {
+        // using wtree_type = self_type; // Take from the tree.
+      public:
+        using field_type = wtree_type::field_type;
+        static const field_type target_k = kTargetK;
+
         size_type height = 0;
         size_type keys = 0;
+        size_type leaf_nodes = 0;
+        size_type internal_nodes = 0;
         size_type unused_keycells = 0;
+        size_type unused_pointers = 0;
+
+        size_type nodes() const noexcept { return internal_nodes + leaf_nodes; }
+
+        size_type allocated_keys() const noexcept {
+            return keys + unused_keycells;
+        }
+
+        size_type keys_in_leaves() const noexcept {
+            if(keys == 0)
+                return 0;
+            return keys - (internal_nodes * target_k);
+        }
+
+        // The total number of bytes used by the tree (object + all allocated
+        // node storage: base fields, key cells and internal pointer arrays).
+        size_type bytes_used() const {
+            // Special case: root node could have unused keycells.
+            size_t leaves_keycells = keys < target_k ? 0 : keys_in_leaves();
+            const size_type internals_memory =
+                internal_nodes * sizeof(node_type);
+            const size_type leaves_memory =
+                (leaf_nodes * kBasefieldsBytes) +
+                (leaves_keycells * sizeof(value_type));
+            return sizeof(wtree_type) + internals_memory + leaves_memory;
+        }
+
+        // The average number of bytes used per value stored in the tree,
+        // including overhead memory.
+        double average_bytes_per_value() const {
+            const size_type total = bytes_used();
+            return keys > 0 ? total / double(keys) : 0;
+        }
+
+        // The total overhead of the tree structure in bytes.
+        size_type total_overhead() const {
+            return bytes_used() - (keys * sizeof(value_type));
+        }
+
+        // The overhead of the tree structure in bytes per value.
+        // Returns zero when no keys are stored.
+        double overhead() const {
+            const size_type tov = total_overhead();
+            return keys ? tov / double(keys) : 0.0;
+        }
+
+        // The fullness of the tree: real key-cell utilization (used over
+        // allocated cells).
+        double fullness() const {
+            const size_type allocated = allocated_keys();
+            return allocated ? (double)keys / (double)allocated : 0.0;
+        }
+
+        // The occupancy of the tree: real pointer utilization (used over
+        // allocated pointers).
+        double occupancy() const {
+            const size_type allocated = internal_nodes * (target_k - 1);
+            if(!unused_pointers) {
+                return 1.0;
+            }
+            return 1.0 - (unused_pointers / double(allocated));
+        }
     };
 
-    // Walks the entire tree once and returns all node statistics at once.
-    // Use this when more than one metric is needed: each single-metric
-    // accessor below re-traverses the tree, so collecting once and reading
-    // the struct fields is cheaper (O(nodes) instead of O(metrics * nodes)).
-    // Complexity: O(nodes) time, O(height) recursion stack (empty tree: O(1)).
-    node_stats collect_stats() const {
+    /**
+     * @brief Walks the entire tree once and returns all node statistics.
+     * @details Complexity: O(nodes) time, O(height) recursion stack (empty
+     * tree: O(1)). Prefer this over stacking the individual accessors
+     * below: each of them re-traverses the tree, while this builds a
+     * single traversed instance to read every metric from.
+     */
+    node_stats collect_stats() const noexcept {
         node_stats stats;
-        if(croot() != nullptr && !is_empty())
+        if(croot() != nullptr)
             collect_stats(croot(), 0, stats);
         return stats;
     }
 
-    // The height of the tree. An empty tree has height 0.
-    // Complexity: O(nodes).
+    /**
+     * @brief The height of the tree; 0 when empty.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
     size_type height() const { return collect_stats().height; }
 
-    // The number of leaf, internal and total nodes used by the tree.
-    // Complexity: O(nodes).
+    /**
+     * @brief The number of leaf nodes in the tree.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
     size_type leaf_nodes() const { return collect_stats().leaf_nodes; }
 
+    /**
+     * @brief The number of internal nodes in the tree.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
     size_type internal_nodes() const { return collect_stats().internal_nodes; }
 
-    size_type nodes() const {
-        const node_stats stats = collect_stats();
-        return stats.leaf_nodes + stats.internal_nodes;
+    /**
+     * @brief The total number of nodes in the tree.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    size_type nodes() const { return collect_stats().nodes(); }
+
+    /**
+     * @brief Total bytes used by the tree (object + all allocated node
+     * storage: base fields, key cells and internal pointer arrays).
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    size_type bytes_used() const { return collect_stats().bytes_used(); }
+
+    /**
+     * @brief Average bytes used per stored value, including overhead.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    double average_bytes_per_value() const {
+        return collect_stats().average_bytes_per_value();
     }
 
-    // The total number of bytes used by the tree (object + all allocated
-    // node storage: base fields, key cells and internal pointer arrays).
-    // Complexity: O(nodes).
-    size_type bytes_used() const {
-        const node_stats stats = collect_stats();
-        const size_type n = stats.leaf_nodes + stats.internal_nodes;
-        return sizeof(self_type) + n * kBasefieldsBytes +
-               (stats.keys + stats.unused_keycells) * sizeof(value_type) +
-               stats.internal_nodes * (kTargetK - 1) * sizeof(void *);
+    /**
+     * @brief Total overhead of the tree structure in bytes.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    size_type total_overhead() const {
+        return collect_stats().total_overhead();
     }
 
-    // The average number of bytes used per value stored in the tree.
-    // Complexity: O(1) — compile-time formula, no traversal.
-    static double average_bytes_per_value() {
-        return sizeof(leaf_fields_type) / (kTargetK * 0.80);
-    }
+    /**
+     * @brief Overhead of the tree structure in bytes per stored value;
+     * zero when no keys are stored.
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    double overhead() const { return collect_stats().overhead(); }
 
-    // The fullness of the tree: real key-cell utilization (used over
-    // allocated cells), following the WTreeMemoryInstrument model.
-    // Complexity: O(nodes).
-    double fullness() const {
-        const node_stats stats = collect_stats();
-        const size_type allocated = stats.keys + stats.unused_keycells;
-        return allocated ? (double)stats.keys / (double)allocated : 0.0;
-    }
+    /**
+     * @brief Fullness of the tree: real key-cell utilization (used over
+     * allocated cells).
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    double fullness() const { return collect_stats().fullness(); }
 
-    // The overhead of the tree structure in bytes per value: total
-    // structural bytes (base fields + wasted key cells + pointer arrays)
-    // divided by the number of values, following the WTreeMemoryInstrument
-    // model (its average_bytes_per_key).
-    // Complexity: O(nodes).
-    double overhead() const {
-        const node_stats stats = collect_stats();
-        const size_type n = stats.leaf_nodes + stats.internal_nodes;
-        const size_type total_bytes =
-            n * kBasefieldsBytes + stats.unused_keycells * sizeof(value_type) +
-            stats.internal_nodes * (kTargetK - 1) * sizeof(void *);
-        return stats.keys ? (double)total_bytes / (double)stats.keys : 0.0;
-    }
+    /**
+     * @brief Occupancy of the tree: real pointer utilization (used over
+     * allocated pointers).
+     * @details Re-traverses the tree (O(nodes)); use collect_stats() when
+     * more than one metric is needed.
+     */
+    double occupancy() const { return collect_stats().occupancy(); }
 
     bool node_bounds_key(const key_type &key, const node_type *node) const {
         assert(node != nullptr);
@@ -710,6 +811,8 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
             for(field_type i = 0; i < kTargetK - 1; ++i) {
                 if(node->child(i) != nullptr) {
                     collect_stats(node->child(i), depth + 1, stats);
+                } else {
+                    ++stats.unused_pointers;
                 }
             }
         } else {

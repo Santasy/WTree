@@ -20,173 +20,289 @@
 
 #include "../detail/index.hpp"
 
+#include "../detail/containers.hpp"
+
+#include <format>
+
 namespace WTreeLib {
 
-struct WTreeMemoryInstrument {
-    unsigned long keys = 0;
-    unsigned long num_nodes = 0;
-    unsigned long height = 0;
-    unsigned long num_internals =
-        0;                        // Number of internal nodes (with descendents)
-    unsigned long num_leaves = 0; // Number of leaves nodes (no descendents)
-    unsigned long unused_keycells = 0; // Unused cells in vector of keys
-    unsigned long unused_ptrcells = 0; // Unused cells in vector of pointers
+/**
+ * @brief Extended tree statistics: a node_stats plus a per-level breakdown.
+ * @details Inherits the tree's @ref WTree "node_stats" aggregate (so any
+ * node_stats method — nodes(), bytes_used(), fullness(), occupancy()... — is
+ * callable on the instrument), and keeps a per-level record (levels). This is
+ * the difference with the tree's inner collect_stats(), which only produces
+ * the aggregate. Fill it via WTreeProfiler::check_statistics.
+ * @tparam Params A @ref WTree "WTree<Params>" instantiation, where Params is
+ *         @ref WTreeLib::WTreeSetParams "WTreeSetParams" or @ref
+ *         WTreeLib::WTreeMapParams "WTreeMapParams".
+ */
+template <typename Params>
+class WTreeMemoryInstrument : public WTree<Params>::node_stats {
+  public:
+    using wtree_type = WTree<Params>;
+    using node_type = wtree_type::node_type;
+    using size_type = wtree_type::size_type;
+    using value_type = wtree_type::value_type;
+    using stats_type = wtree_type::node_stats;
 
-    unsigned long total_bytes =
-        0; // Bytes of overhead aside (key-value)s memory.
+    /**
+     * @brief Per-level statistics of the referenced tree.
+     * @details Counts the keys, nodes and pointer cells present at one level,
+     * with the same semantics as node_stats.
+     */
+    class Level : public WTree<Params>::node_stats {
+      public:
+        /**
+         * @brief Creates a Level at some hight. Root is created at height=0.
+         */
+        Level(size_t height = 0) { this->height = height; };
 
-    double average_bytes_per_key = 0; // Calculated as total_bytes/keys
-    double connectivity = 0.0;
+        size_t level() const noexcept { return this->height; }
 
-    struct Level {
-        unsigned int level = 0;
-        unsigned long keys = 0;
-        unsigned long num_nodes = 0;
-        unsigned long num_internals = 0;
-        unsigned long num_leaves = 0;
-        double connectivity = 0.0;
+        // The total number of bytes used by the level (object + all allocated
+        // node storage: base fields, key cells and internal pointer arrays).
+        size_type bytes_used() const {
+            size_t leaves_keycells;
+            if(this->height == 0) { // Root is a special case.
+                leaves_keycells =
+                    this->keys < this->kTargetK ? 0 : this->keys_in_leaves();
+            } else {
+                leaves_keycells = this->keys_in_leaves();
+            }
+            const size_type internals_memory =
+                this->internal_nodes * sizeof(node_type);
+            const size_type leaves_memory =
+                (this->leaf_nodes * this->kBasefieldsBytes) +
+                (leaves_keycells * sizeof(value_type));
+            return internals_memory + leaves_memory;
+        }
 
-        double acum_connectivity = 0.0;
+        // The average number of bytes used per value stored in the level,
+        // including overhead memory.
+        double average_bytes_per_value() const {
+            const size_type total = bytes_used();
+            return this->keys > 0 ? total / double(this->keys) : 0;
+        }
 
-        void evaluate(unsigned int k) {
-            num_leaves = num_nodes - num_internals;
-            connectivity = num_internals > 0
-                               ? acum_connectivity / (num_internals * (k - 1))
-                               : 0;
-        };
+        // The total overhead of the level in bytes.
+        size_type total_overhead() const {
+            return bytes_used() - (this->keys * sizeof(value_type));
+        }
+
+        // The overhead of the level in bytes per value.
+        // Returns zero when no keys are stored.
+        double overhead() const {
+            const size_type tov = total_overhead();
+            return this->keys ? tov / double(this->keys) : 0.0;
+        }
     };
+
     std::vector<Level> levels;
 
-    template <typename T, class NODE> void evaluate() {
-        const uint k_value = NODE::kTargetK;
-        // Evaluate levels:
-        for(unsigned int l = 0; l < levels.size(); ++l) {
-            Level &level = levels[l];
-            assert(level.level == l);
-            level.evaluate(k_value);
-            keys += level.keys;
-            num_nodes += level.num_nodes;
-            num_internals += level.num_internals;
-            connectivity += level.acum_connectivity; // use as acum
+    /**
+     * @brief Also returns the last created level.
+     */
+    Level *ensure_level_exists(size_t depth) noexcept {
+        for(size_t i = levels.size(); i < depth + 1; ++i)
+            levels.push_back(Level(i));
+        return &levels[levels.size() - 1];
+    }
+
+    /**
+     * @brief Finalizes the per-level records from the accumulated counts.
+     */
+    void evaluate() {
+        this->height = levels.size();
+        for(size_t i = 0; i < levels.size(); ++i) {
+            Level &level = levels[i];
+            assert(level.height == i);
+            evaluate_level(level);
         }
-
-        // Calculate general values:
-        height = levels.size() - 1;
-        num_leaves = num_nodes - num_internals;
-        connectivity = num_internals > 0
-                           ? connectivity / (num_internals * (k_value - 1))
-                           : 0;
-
-        total_bytes = num_nodes * NODE::kBasefieldsBytes +
-                      unused_keycells * sizeof(T) +
-                      num_internals * (k_value - 1) * sizeof(void *);
-        average_bytes_per_key =
-            keys > 0 ? (double)total_bytes / keys : total_bytes;
     };
 
-    char *toJsonBody() {
-        char *oline = new char[1024 + (512 * levels.size())];
-        const double fullness = (double)keys / (keys + unused_keycells);
-        int send = sprintf(oline,
-                           "\"keys\": %10lu,"
-                           "\"nodes\": %6lu,"
-                           "\"height\": %3lu,\n"
-                           "\"internals\": %4lu,"
-                           "\"leaves\": %4lu,"
-                           "\"unused_keycells\": %6lu,"
-                           "\"unused_ptrcells\": %6lu,\n"
-                           "\"total_bytes\": %10lu,"
-                           "\"overhead\": %f,"
-                           "\"fullness\": %f,"
-                           "\"connectivity\": %f,\n",
-                           keys, num_nodes, height, num_internals, num_leaves,
-                           unused_keycells, unused_ptrcells, total_bytes,
-                           average_bytes_per_key, fullness, connectivity);
-        send += sprintf(oline + send, "\"levels\":[\n");
-        for(size_t l = 0; l < levels.size(); ++l) {
-            const Level &level = levels[l];
-            send +=
-                sprintf(oline + send,
-                        "\t{"
-                        "\"level\": %3u, "
-                        "\"keys\": %5lu, "
-                        "\"num_nodes\": %4lu, "
-                        "\"num_internals\": %4lu, "
-                        "\"num_leaves\": %4lu, "
-                        "\"connectivity\": %f"
-                        "}%c\n",
-                        level.level, level.keys, level.num_nodes,
-                        level.num_internals, level.num_leaves,
-                        level.connectivity, l < levels.size() - 1 ? ',' : ' ');
+    /**
+     * @brief Resets the instrument to its empty state.
+     */
+    void clean() { *this = WTreeMemoryInstrument(); };
+
+    /**
+     * @brief Builds the memory register JSON body (without the wrapper keys).
+     * @return A concatenated std::string with all metrics for the tree, and
+     * reduced metrics for the levels.
+     */
+    std::string toJsonBody() const {
+        using std::string, std::format;
+        string oline;
+        const size_t suggested_size = 256 + (256 * levels.size());
+        oline.reserve(suggested_size);
+        oline += format("\"keys\": {:10},", this->keys);
+        oline += format("\"height\": {:3},\n", this->height);
+        oline += format("\"nodes\": {:6},", this->nodes());
+        oline += format("\"leaves\": {:4},", this->leaf_nodes);
+        oline += format("\"internals\": {:4},", this->internal_nodes);
+        oline += format("\"unused_keycells\": {:6},", this->unused_keycells);
+        oline += format("\"unused_ptrcells\": {:6},\n", this->unused_pointers);
+        oline += format("\"total_bytes\": {:10},", this->bytes_used());
+        oline += format("\"total_overhead\": {:10},", this->total_overhead());
+        oline += format("\"overhead\": {:f},", this->overhead());
+        oline += format("\"fullness\": {:f},", this->fullness());
+        oline += format("\"occupancy\": {:f},\n", this->occupancy());
+
+        oline += "\"levels\":[\n";
+        const size_t last_level = levels.size() - 1;
+        for(size_t i = 0; i < levels.size(); ++i) {
+            // Reduced some metrics for the levels.
+            const Level &level = levels[i];
+            oline += "\t{";
+            oline += format("\"height\": {:3},", this->height);
+            oline += format("\"keys\": {:10},", this->keys);
+            oline += format("\"leaves\": {:4},", this->leaf_nodes);
+            oline += format("\"internals\": {:4},\n", this->internal_nodes);
+            oline +=
+                format("\"unused_keycells\": {:6},", this->unused_keycells);
+            oline +=
+                format("\"unused_ptrcells\": {:6},", this->unused_pointers);
+            oline +=
+                format("\"total_overhead\": {:10},", this->total_overhead());
+            oline += format("\"overhead\": {:f},\n", this->overhead());
+            oline += format("\"fullness\": {:f},", this->fullness());
+            oline += format("\"occupancy\": {:f}", this->occupancy());
+            oline += (i < last_level) ? "},\n" : "}\n";
         }
-        sprintf(oline + send, "]");
+        oline += "]";
         return oline;
     };
 
-    void clean() {
-        levels.clear();
-        keys = 0;
-        num_nodes = 0;
-        height = 0;
-        num_internals = 0;
-        num_leaves = 0;
-        unused_keycells = 0;
-        unused_ptrcells = 0;
-        total_bytes = 0;
-        average_bytes_per_key = 0;
-        connectivity = 0.0;
-    };
+  private:
+    void evaluate_level(Level &level) {
+        this->height += level.height;
+        this->keys += level.keys;
+        this->leaf_nodes += level.leaf_nodes;
+        this->internal_nodes += level.internal_nodes;
+        this->unused_keycells += level.unused_keycells;
+        this->unused_pointers += level.unused_pointers;
+    }
 };
 
-template <typename Params> struct WTreeProfiler : public WTree<Params> {
+/**
+ * @brief Computes the extended statistics of any WTree container.
+ * @details Complements the tree's collect_stats() with a per-level
+ * breakdown: the aggregate fields are copied verbatim from the tree's own
+ * collect_stats(), and levels is filled by an extra traversal.
+ * @tparam Params A @ref WTree "WTree<Params>" instantiation, where Params is
+ *         @ref WTreeLib::WTreeSetParams "WTreeSetParams" or @ref
+ *         WTreeLib::WTreeMapParams "WTreeMapParams".
+ */
+template <typename Params> struct WTreeProfiler {
     using wtree_type = WTree<Params>;
-    using node_type = typename wtree_type::node_type;
+    using node_type = wtree_type::node_type;
+    using container_type = WTreeContainer<wtree_type>;
+    using instrument_type = WTreeMemoryInstrument<Params>;
+    using level_type = instrument_type::Level;
+    using it_type = container_type::iterator;
+    using const_it_type = container_type::const_iterator;
 
-  public:
     /**
-     * @brief Computes tree statistics from the root and stores them in reg.
-     * @details Fills num_nodes, num_internals, num_leaves, the unused key and
-     * pointer cells, and connectivity (ratio of used pointer connections over
-     * all allocated pointer cells).
+     * @brief Creates an instrument to computes the tree statistics starting
+     * from its root.
+     * @details The aggregate is trusted to the tree's own collect_stats();
+     * the added value over that inner call is the per-level breakdown kept
+     * in instrument.levels.
+     * @param container The container (set, map, multiset, multimap) whose
+     *        tree is profiled.
      */
-    static void check_statistics(wtree_type &sref, WTreeMemoryInstrument &reg) {
-        if(sref.root() == nullptr)
-            return;
-        _check_statistics(reg, sref.root(), 0);
-        reg.evaluate<Params, node_type>();
+    static instrument_type collect_statistics(const container_type &container) {
+        instrument_type reg;
+        collect_statistics(container, reg);
+        return reg;
     }
 
-  private:
     /**
-     * @brief Computes the statistics of the subtree rooted at the given node.
+     * @brief Computes the tree statistics of a container and stores them in
+     * the instrument.
+     * @details The aggregate is trusted to the tree's own collect_stats();
+     * the added value over that inner call is the per-level breakdown kept
+     * in instrument.levels.
+     * @param container The container (set, map, multiset, multimap) whose
+     *        tree is profiled.
+     * @param reg The register to fill; it is reset first.
      */
-    static void _check_statistics(WTreeMemoryInstrument &reg,
-                                  const node_type *u, ulong depth) {
-        assert(u);
-        const uint k_value = node_type::kTargetK;
-
-        // First ensure the level exists
-        for(size_t i = reg.levels.size(); i < depth + 1; ++i) {
-            reg.levels.push_back(WTreeMemoryInstrument::Level());
-            reg.levels[i].level = i;
+    static void collect_statistics(const container_type &container,
+                                   instrument_type &reg) {
+        reg.clean();
+        const wtree_type &tree = *container.tree();
+        static_cast<instrument_type::stats_type &>(reg) = tree.collect_stats();
+        if(tree.croot() != nullptr) {
+            collect_from_node(reg, tree.croot(), 0);
         }
+        reg.evaluate();
+    }
 
-        reg.levels[depth].keys += u->size();
-        ++reg.levels[depth].num_nodes;
-        reg.unused_keycells += u->capacity() - u->size();
+    /**
+     * @brief Creates an instrument to computes the tree statistics starting
+     * from its root.
+     * @details The aggregate is trusted to the tree's own collect_stats();
+     * the added value over that inner call is the per-level breakdown kept
+     * in instrument.levels.
+     * @param it And iterator from some WTree container (set, map, multiset,
+     * multimap) whose tree is profiled.
+     */
+    static instrument_type collect_statistics(const const_it_type &it) {
+        instrument_type reg;
+        collect_statistics(it.node, reg);
+        return reg;
+    }
 
-        if(u->is_internal()) {
-            ++reg.levels[depth].num_internals;
+    /**
+     * @brief Creates an instrument to computes the tree statistics starting
+     * from its root.
+     * @details The aggregate is trusted to the tree's own collect_stats();
+     * the added value over that inner call is the per-level breakdown kept
+     * in instrument.levels.
+     * @param it And iterator from some WTree container (set, map, multiset,
+     * multimap) whose tree is profiled.
+     * @param reg The register to fill; it is reset first.
+     */
+    static void collect_statistics(const const_it_type &it,
+                                   instrument_type &reg) {
+        reg.clean();
+        collect_statistics(it.node, reg);
+        reg.evaluate();
+    }
+
+    /**
+     * @brief Computes the statistics from an specified root node and stores
+     * them in the instrument for the level.
+     * @param reg The register to fill.
+     * @param node Starting point of the collect navigation.
+     * @param depth Current node depth to register.
+     */
+    static void collect_from_node(instrument_type &reg, const node_type *node,
+                                  ulong depth = 0) {
+        assert(node != nullptr);
+        const uint k_value = node_type::kTargetK;
+        reg.ensure_level_exists(depth);
+
+        level_type &level = *reg.ensure_level_exists(depth);
+        level.keys += node->size();
+        level.unused_keycells += node->capacity() - node->size();
+
+        if(node->is_internal()) {
+            ++level.internal_nodes;
             for(typename wtree_type::field_type i = 0; i < k_value - 1; ++i) {
-                if(u->child(i)) {
-                    ++reg.levels[depth].acum_connectivity;
-                    _check_statistics(reg, u->child(i), depth + 1);
-                } else
-                    (reg.unused_ptrcells)++;
+                if(node->child(i)) {
+                    collect_from_node(reg, node->child(i), depth + 1);
+                } else {
+                    ++level.unused_pointers;
+                }
             }
+        } else {
+            ++level.leaf_nodes;
         }
     }
 };
 
 } // namespace WTreeLib
-#endif
+
+#endif // _WTREE_PROFILING_H_
