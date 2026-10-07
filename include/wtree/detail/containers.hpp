@@ -67,7 +67,7 @@ struct WTreeCommonParams : public BalanceOptions {
 
     // Internal allocator for node storage
     using internal_allocator_type =
-        typename allocator_traits::template rebind_alloc<char>;
+        allocator_traits::template rebind_alloc<char>;
     using internal_allocator_traits =
         std::allocator_traits<internal_allocator_type>;
 
@@ -84,7 +84,7 @@ struct WTreeCommonParams : public BalanceOptions {
         size_helper::determine_initial_bytes(kTargetNodeBytes);
 
     using field_type =
-        typename std::conditional < kTargetK<255, uint8_t, uint16_t>::type;
+        std::conditional < kTargetK<255, uint8_t, uint16_t>::type;
 
     // Binary search thresholds based on key type complexity.
     static constexpr bool is_numeric_key =
@@ -103,32 +103,33 @@ struct WTreeCommonParams : public BalanceOptions {
 /**
  * A common base class for WTreeLib::set, map, multiset and multimap.
  * @tparam Tree A @ref WTree "WTree<Params>" instantiation, where Params is
- *         @ref WTreeSetParams or @ref WTreeMapParams.
+ *         @ref WTreeLib::WTreeSetParams "WTreeSetParams" or @ref
+ *         WTreeLib::WTreeMapParams "WTreeMapParams".
  */
 template <typename Tree> class WTreeContainer {
 
   public:
     using wtree_type = Tree;
 
-    using params_type = typename Tree::params_type;
-    using key_type = typename Tree::key_type;
-    using value_type = typename Tree::value_type;
+    using params_type = Tree::params_type;
+    using key_type = Tree::key_type;
+    using value_type = Tree::value_type;
 
-    using key_compare = typename Tree::key_compare;
-    using allocator_type = typename Tree::allocator_type;
+    using key_compare = Tree::key_compare;
+    using allocator_type = Tree::allocator_type;
 
-    using pointer = typename Tree::pointer;
-    using const_pointer = typename Tree::const_pointer;
-    using reference = typename Tree::reference;
-    using const_reference = typename Tree::const_reference;
+    using pointer = Tree::pointer;
+    using const_pointer = Tree::const_pointer;
+    using reference = Tree::reference;
+    using const_reference = Tree::const_reference;
 
-    using size_type = typename Tree::size_type;
-    using difference_type = typename Tree::difference_type;
+    using size_type = Tree::size_type;
+    using difference_type = Tree::difference_type;
 
-    using iterator = typename Tree::iterator;
-    using const_iterator = typename Tree::const_iterator;
-    using reverse_iterator = typename Tree::reverse_iterator;
-    using const_reverse_iterator = typename Tree::const_reverse_iterator;
+    using iterator = Tree::iterator;
+    using const_iterator = Tree::const_iterator;
+    using reverse_iterator = Tree::reverse_iterator;
+    using const_reverse_iterator = Tree::const_reverse_iterator;
 
     static constexpr int kExactMatch = Tree::kExactMatch;
     static constexpr int kMatchMask = Tree::kMatchMask;
@@ -224,21 +225,24 @@ template <typename Tree> class WTreeContainer {
     // Each single-metric accessor below traverses the whole tree (O(nodes));
     // call collect_stats() once when several metrics are needed and read the
     // returned node_stats fields instead.
+    // Follow to tree.hpp for more details.
 
-    using node_stats = typename Tree::node_stats;
+    using node_stats = Tree::node_stats;
 
     node_stats collect_stats() const { return m_tree.collect_stats(); }
 
-    static double average_bytes_per_value() {
-        return Tree::average_bytes_per_value();
-    }
-    double fullness() const { return m_tree.fullness(); }
-    double overhead() const { return m_tree.overhead(); }
     size_type height() const { return m_tree.height(); }
-    size_type internal_nodes() const { return m_tree.internal_nodes(); }
     size_type leaf_nodes() const { return m_tree.leaf_nodes(); }
+    size_type internal_nodes() const { return m_tree.internal_nodes(); }
     size_type nodes() const { return m_tree.nodes(); }
     size_type bytes_used() const { return m_tree.bytes_used(); }
+    double average_bytes_per_value() {
+        return m_tree.average_bytes_per_value();
+    }
+    double total_overhead() const { return m_tree.total_overhead(); }
+    double overhead() const { return m_tree.overhead(); }
+    double fullness() const { return m_tree.fullness(); }
+    double occupancy() const { return m_tree.occupancy(); }
 };
 
 } // namespace WTreeLib

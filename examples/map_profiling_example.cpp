@@ -32,36 +32,52 @@
 using namespace std;
 using namespace WTreeLib;
 
-#ifdef __BASIC_TEST_PAIR
-bool test_pair();
-#endif
+using strmap_type =
+    WTreeLib::map<string, string, std::less<string>,
+                  std::allocator<std::pair<const string, string>>, 256>;
 
-struct DummyStruct {
-    int x, y, z;
-};
-bool test_using_DummyStruct();
-
-class DummyClass {
-  public:
-    int origin;
-    vector<int> values;
-
-    DummyClass(int origin, int n) : origin(origin) { values.assign(n, 1); }
-
-    void printData() const {
-        cout << "Origin: " << origin << "\n";
-        cout << "Values: " << values.size() << "\n";
-    }
-};
+void print_stats(auto &stats);
+void example_collect_stats_from_tree();
+void example_collect_stats_from_profile() {
+    // TODO:
+}
 
 int main(int argc, char **argv) {
-    WTreeLib::map<DummyStruct, DummyClass, std::less<DummyStruct>,
-                  std::allocator<std::pair<const DummyStruct, DummyClass>>, 128>
-        wide_map;
-    auto *wtree = wide_map.tree();
+    example_collect_stats_from_tree();
+    example_collect_stats_from_profile();
+    return 0;
+}
 
-    WTreeMemoryInstrument reg;
+void example_collect_stats_from_tree() {
+    strmap_type wide_map;
 
-    // WTreeProfiler<wide_map::params_type>::checkStatistics(*wtree, reg);
-    // reg.evaluate<wide_map::value_type, class NODE>();
+    cout << "=====\nEmpty map container:\n";
+    auto stats = wide_map.tree()->collect_stats();
+    print_stats(stats);
+
+    const size_t size = 1'000;
+    for(size_t i = 0; i < size; ++i) {
+        string key = format("user00{}", i);
+        string value = format("data{}data", i * 123);
+        wide_map[key] = value;
+    }
+
+    cout << "\n=====\nMap with " << size << " keys:\n";
+    stats = wide_map.tree()->collect_stats();
+    print_stats(stats);
+}
+
+void print_stats(auto &stats) {
+    cout << format("\"keys\": {:10},", stats.keys);
+    cout << format("\"height\": {:3},\n", stats.height);
+    cout << format("\"nodes\": {:6},", stats.nodes());
+    cout << format("\"internals\": {:4},", stats.internal_nodes);
+    cout << format("\"leaves\": {:4},", stats.leaf_nodes);
+    cout << format("\"unused_keycells\": {:6},", stats.unused_keycells);
+    cout << format("\"unused_ptrcells\": {:6},\n", stats.unused_pointers);
+    cout << format("\"total_bytes\": {:10},", stats.bytes_used());
+    cout << format("\"total_overhead\": {:10},", stats.total_overhead());
+    cout << format("\"overhead\": {:f},", stats.overhead());
+    cout << format("\"fullness\": {:f},", stats.fullness());
+    cout << format("\"occupancy\": {:f},\n", stats.occupancy());
 }

@@ -72,12 +72,14 @@ class WTreeMapContainer : public WTreeUniqueContainer<WTree> {
     using super_type = WTreeUniqueContainer<WTree>;
 
   public:
+    using params_type = super_type::params_type;
+
     using typename super_type::const_iterator;
     using typename super_type::iterator;
     using typename super_type::key_type;
     using typename super_type::value_type;
-    using data_type = typename WTree::data_type;
-    using mapped_type = typename WTree::mapped_type;
+    using data_type = WTree::data_type;
+    using mapped_type = WTree::mapped_type;
 
     // Inherit all constructors from WTreeUniqueContainer.
     using super_type::super_type;
@@ -184,6 +186,8 @@ class map : public WTreeMapContainer<
         Key, Value, Compare, Alloc, TargetNodeSize, Unique, BalanceOptions>>>;
 
   public:
+    using super_type::params_type;
+
     // Inherit all constructors from WTreeMapContainer.
     using super_type::super_type;
 

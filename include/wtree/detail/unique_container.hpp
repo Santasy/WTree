@@ -35,9 +35,9 @@ namespace WTreeLib {
 template <typename Tree>
 class WTreeUniqueContainer : public WTreeContainer<Tree> {
     using super_type = WTreeContainer<Tree>;
-    using params_type = typename Tree::params_type;
 
   public:
+    using params_type = Tree::params_type;
     using typename super_type::key_type;
     using typename super_type::value_type;
 
