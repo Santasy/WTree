@@ -43,6 +43,25 @@ cmake --preset analysis
 cmake --build build/debug-analysis --target run_analysis_tests
 ```
 
+The in-order suites (`inorder_set_stress`, `inorder_map_stress`) are part of the
+same opt-in set and fill a `set<uint>` / `map<string, string>` with an ascending
+key sequence (the worst case for a node-based ordered structure). Their final
+size is an execution parameter and the balance policy is a build knob:
+
+```shell
+# 20k keys with the split policy forced on (empty = library default)
+cmake --preset analysis -DWTREE_STRESS_FINAL_SIZE=20000 -DWTREE_STRESS_SPLIT=true
+cmake --build build/debug-analysis --target run_inorder_stress_tests
+# or run them directly, overriding the size at runtime
+./build/debug-analysis/bin/test/inorder_set_stress_test.dbg 50000
+```
+
+| CMake variable | Values | Default | Meaning |
+|---|---|---|---|
+| `WTREE_STRESS_SPLIT` | `true` / `false` / empty | empty (library default) | Force the split insert-budget on the in-order suites. |
+| `WTREE_STRESS_SLIDE` | `true` / `false` / empty | empty (library default) | Force the slide insert-budget on the in-order suites. |
+| `WTREE_STRESS_FINAL_SIZE` | elements | `100000` | Final element count handed to the in-order suites as `argv[1]`. |
+
 ## See the examples
 
 Some example main files are at `./examples/`. Among them:
