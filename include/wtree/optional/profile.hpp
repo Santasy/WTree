@@ -233,7 +233,6 @@ template <typename Params> struct WTreeProfiler {
                                    instrument_type &reg) {
         reg.clean();
         const wtree_type &tree = *container.tree();
-        static_cast<instrument_type::stats_type &>(reg) = tree.collect_stats();
         if(tree.croot() != nullptr) {
             collect_from_node(reg, tree.croot(), 0);
         }
@@ -241,34 +240,34 @@ template <typename Params> struct WTreeProfiler {
     }
 
     /**
-     * @brief Creates an instrument to computes the tree statistics starting
-     * from its root.
-     * @details The aggregate is trusted to the tree's own collect_stats();
-     * the added value over that inner call is the per-level breakdown kept
-     * in instrument.levels.
-     * @param it And iterator from some WTree container (set, map, multiset,
-     * multimap) whose tree is profiled.
+     * @brief Creates an instrument to computes the statistics of the subtree
+     * starting at the iterator's node.
+     * @details Walks the node's subtree (root of the walk is level 0) and
+     * sums the per-level breakdown in ``evaluate()``.
+     * @param it An iterator from some WTree container (set, map, multiset,
+     * multimap) whose node's subtree is profiled.
      */
     static instrument_type collect_statistics(const const_it_type &it) {
         instrument_type reg;
-        collect_statistics(it.node, reg);
+        collect_statistics(it, reg);
         return reg;
     }
 
     /**
-     * @brief Creates an instrument to computes the tree statistics starting
-     * from its root.
-     * @details The aggregate is trusted to the tree's own collect_stats();
-     * the added value over that inner call is the per-level breakdown kept
-     * in instrument.levels.
-     * @param it And iterator from some WTree container (set, map, multiset,
-     * multimap) whose tree is profiled.
+     * @brief Computes the statistics of the subtree starting at the
+     * iterator's node and stores them in the instrument.
+     * @details Walks the node's subtree (root of the walk is level 0) and
+     * sums the per-level breakdown in ``evaluate()``.
+     * @param it An iterator from some WTree container (set, map, multiset,
+     * multimap) whose node's subtree is profiled.
      * @param reg The register to fill; it is reset first.
      */
     static void collect_statistics(const const_it_type &it,
                                    instrument_type &reg) {
         reg.clean();
-        collect_statistics(it.node, reg);
+        if(it.node != nullptr) {
+            collect_from_node(reg, it.node, 0);
+        }
         reg.evaluate();
     }
 
