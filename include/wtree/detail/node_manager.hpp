@@ -175,8 +175,10 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
 
     void internal_destroy_child_unchecked(node_type *parent, field_type index);
 
-    // Erase the tree visiting childrens recursively.
-    void internal_recursive_delete(node_type *u);
+    // Deletes the subtree rooted at -u- in post-order (children before their
+    // parent), walking with an explicit heap stack so the call stack stays
+    // flat even on tall trees.
+    void internal_delete_subtree(node_type *u);
 
     // === Value relocation ===
     //

@@ -18,8 +18,6 @@
 #ifndef _WTREE_PROFILING_H_
 #define _WTREE_PROFILING_H_
 
-#include "../detail/index.hpp"
-
 #include "../detail/containers.hpp"
 
 #include <format>
@@ -106,9 +104,10 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
      * @brief Also returns the last created level.
      */
     Level *ensure_level_exists(size_t depth) noexcept {
-        for(size_t i = levels.size(); i < depth + 1; ++i)
-            levels.push_back(Level(i));
-        return &levels[levels.size() - 1];
+        while (levels.size() <= depth) {
+            levels.push_back(Level(levels.size()));
+        }
+        return &levels[depth];
     }
 
     /**

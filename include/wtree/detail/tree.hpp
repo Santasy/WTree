@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace WTreeLib {
 
@@ -127,7 +128,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     // Destructor.
     ~WTree() {
         if(croot()) {
-            m_manager.internal_recursive_delete(root());
+            m_manager.internal_delete_subtree(root());
         }
         mutable_root() = nullptr;
     }
@@ -186,7 +187,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     void assign(const self_type &other) {
         // Clean up existing tree
         if(croot()) {
-            m_manager.internal_recursive_delete(root());
+            m_manager.internal_delete_subtree(root());
         }
 
         // Copy comparator and allocator
@@ -279,7 +280,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         if(node->is_internal()) {
             for(field_type i = 0; i < kTargetK - 1; ++i) {
                 if(node->child(i) != nullptr) {
-                    m_manager.internal_recursive_delete(node->child(i));
+                    m_manager.internal_delete_subtree(node->child(i));
                     node->set_child(i, nullptr);
                 }
             }
@@ -420,7 +421,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
     /**
      * @brief Walks the entire tree once and returns all node statistics.
-     * @details Complexity: O(nodes) time, O(height) recursion stack (empty
+     * @details Complexity: O(nodes) time, O(height) heap stack (empty
      * tree: O(1)). Prefer this over stacking the individual accessors
      * below: each of them re-traverses the tree, while this builds a
      * single traversed instance to read every metric from.
@@ -798,23 +799,46 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         return iter;
     }
 
-    // Recursively accumulate node statistics for the subtree at -node-.
+    // Accumulate node statistics for the subtree at -node-, walking with an
+    // explicit heap stack so the call stack stays flat even on tall trees.
     void collect_stats(const node_type *node, size_type depth,
                        node_stats &stats) const {
-        stats.height = std::max(stats.height, depth + 1);
-        stats.keys += node->size();
-        stats.unused_keycells += node->capacity() - node->size();
-        if(node->is_internal()) {
-            ++stats.internal_nodes;
-            for(field_type i = 0; i < kTargetK - 1; ++i) {
-                if(node->child(i) != nullptr) {
-                    collect_stats(node->child(i), depth + 1, stats);
+        struct Frame {
+            const node_type *node;
+            size_type depth;
+            field_type child;
+            bool entered;
+        };
+        std::vector<Frame> stack;
+        stack.push_back({node, depth, 0, false});
+        while(!stack.empty()) {
+            Frame &f = stack.back();
+            if(!f.entered) {
+                f.entered = true;
+                stats.height = std::max(stats.height, f.depth + 1);
+                stats.keys += f.node->size();
+                stats.unused_keycells += f.node->capacity() - f.node->size();
+                if(f.node->is_internal()) {
+                    ++stats.internal_nodes;
                 } else {
-                    ++stats.unused_pointers;
+                    ++stats.leaf_nodes;
                 }
             }
-        } else {
-            ++stats.leaf_nodes;
+            if(f.node->is_internal()) {
+                if(f.child < kTargetK - 1) {
+                    field_type idx = f.child++;
+                    const node_type *c = f.node->child(idx);
+                    if(c != nullptr) {
+                        stack.push_back({c, f.depth + 1, 0, false});
+                    } else {
+                        ++stats.unused_pointers;
+                    }
+                } else {
+                    stack.pop_back();
+                }
+            } else {
+                stack.pop_back();
+            }
         }
     }
 

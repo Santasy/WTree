@@ -25,6 +25,7 @@
 #include <cstring>
 #include <new>
 #include <utility>
+#include <vector>
 
 namespace WTreeLib {
 
@@ -198,17 +199,31 @@ WTreeNodeManager<Params>::internal_destroy_child_unchecked(node_type *parent,
 }
 
 template <class Params>
-void WTreeNodeManager<Params>::internal_recursive_delete(node_type *u) {
+void WTreeNodeManager<Params>::internal_delete_subtree(node_type *u) {
     assert(u != nullptr); // Reaching here  with a nullptr may mean a double
                           // free occurred.
-    if(u->is_internal()) {
-        for(field_type i = 0; i < kTargetK - 1; ++i) {
-            if(u->child(i) != nullptr)
-                internal_recursive_delete(u->child(i));
+    struct Frame {
+        node_type *node;
+        field_type child;
+    };
+    std::vector<Frame> stack;
+    stack.push_back({u, 0});
+    while(!stack.empty()) {
+        Frame &f = stack.back();
+        if(f.node->is_internal()) {
+            if(f.child < kTargetK - 1) {
+                field_type idx = f.child++;
+                if(f.node->child(idx) != nullptr) {
+                    stack.push_back({f.node->child(idx), 0});
+                }
+            } else {
+                delete_internal_node(f.node);
+                stack.pop_back();
+            }
+        } else {
+            delete_leaf_node(f.node);
+            stack.pop_back();
         }
-        delete_internal_node(u);
-    } else {
-        delete_leaf_node(u);
     }
 }
 
