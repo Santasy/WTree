@@ -274,27 +274,42 @@ template <typename Params> class WTreeNode {
     // to handle both plain compare and compare_to. For compare_to binary
     // search, unique containers early-stop on exact match; multi containers
     // recurse left.
+    // Shared return contract: a bare index is the lower bound of the query
+    // in the scanned half-open interval [s, e) — -e- when every key in it
+    // is less than the query; a hit on an equal key carries the kExactMatch
+    // bit and names the leftmost equal slot.
+
+    /** @brief Linear scan of [s, e) for the lower bound of -query_key-. */
     template <typename Compare>
     int linear_lower_bound_search(const key_type &query_key, int s, int e,
                                   const Compare &comp) const;
 
+    /** @brief The lower-bound scan of [s, e) walked right-to-left. */
     template <typename Compare>
     int reversed_linear_upper_bound_search(const key_type &query_key, int s,
                                            int e, const Compare &comp) const;
 
+    /** @brief Binary scan of [s, e) for the lower bound of -k-. */
     template <typename Compare>
     int binary_lower_bound_search(const key_type &k, int s, int e,
                                   const Compare &comp) const;
 
+    /**
+     * @brief Binary scan that early-stops on any equal key.
+     * @details Multi containers may return a non-leftmost hit; callers that
+     * need the leftmost equal slot must use binary_lower_bound_search.
+     */
     template <typename Compare>
     int binary_search_any(const key_type &k, int s, int e,
                           const Compare &comp) const;
 
     // Bounded variants — assumes key is within [key(0), key(size-1)].
+    /** @brief Linear lower-bound scan over the whole node. */
     template <typename Compare>
     int closed_linear_lower_bound_search(const key_type &query_key,
                                          const Compare &comp) const;
 
+    /** @brief Binary lower-bound scan over the whole node. */
     template <typename Compare>
     int closed_binary_lower_bound_search(const key_type &k,
                                          const Compare &comp) const;

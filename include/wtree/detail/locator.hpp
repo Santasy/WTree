@@ -76,12 +76,22 @@ class WTreeLocator : protected WTreeTypeAliases<Params> {
     template <typename IterType>
     int internal_locate_any(const key_type &key, IterType &iter) const;
 
+    /** @brief Locate from a hint: ascends until the key is bounded, then
+     *         performs the early-stop descent of internal_locate_any. */
     template <typename IterType>
     int internal_locate_any_hint(const key_type &key, IterType &iter) const {
         internal_ascend_until_bound(key, iter);
         return internal_locate_any(key, iter);
     }
 
+    /**
+     * @brief Ascend the hint's ancestors until one bounds -key-, leaving
+     *        the iterator positioned for descent from there.
+     * @details A node is left when the key sorts before its first key or
+     * after its last (in the latter case the index steps past the separating
+     * key onto the right child); the walk stops at the first node whose
+     * key range contains -key-, or at the root.
+     */
     template <typename IterType>
     void internal_ascend_until_bound(const key_type &key,
                                      IterType &iter) const {
@@ -193,7 +203,21 @@ class WTreeLocator : protected WTreeTypeAliases<Params> {
         return internal_upper_bound(key, iter);
     }
 
+    /**
+     * @brief Walk -iter- down its subtree to the slot holding the greatest
+     *        key, taking the rightmost available child at each level.
+     * @details On an internal node without usable child pointers the walk
+     * stops on the node's own last key; callers re-check is_internal() and
+     * convert such a node to a leaf (see tree.tpp erase path).
+     */
     void visit_path_to_greatest_leaf_value(iterator &iter) noexcept;
+
+    /**
+     * @brief Walk -iter- down its subtree to the slot holding the smallest
+     *        key, taking the leftmost available child at each level.
+     * @details Mirror of visit_path_to_greatest_leaf_value; same stop rule
+     * when an internal node carries no child pointers.
+     */
     void visit_path_to_smallest_leaf_value(iterator &iter) noexcept;
 };
 } // namespace WTreeLib
