@@ -283,21 +283,21 @@ template <typename Params> struct WTreeProfiler {
         assert(node != nullptr);
         const uint k_value = node_type::kTargetK;
 
-        level_type &level = *reg.ensure_level_exists(depth);
-        level.keys += node->size();
-        level.unused_keycells += node->capacity() - node->size();
+        reg.ensure_level_exists(depth);
+        reg.levels[depth].keys += node->size();
+        reg.levels[depth].unused_keycells += node->capacity() - node->size();
 
         if(node->is_internal()) {
-            ++level.internal_nodes;
+            ++reg.levels[depth].internal_nodes;
             for(typename wtree_type::field_type i = 0; i < k_value - 1; ++i) {
                 if(node->child(i)) {
                     collect_from_node(reg, node->child(i), depth + 1);
                 } else {
-                    ++level.unused_pointers;
+                    ++reg.levels[depth].unused_pointers;
                 }
             }
         } else {
-            ++level.leaf_nodes;
+            ++reg.levels[depth].leaf_nodes;
         }
     }
 };
