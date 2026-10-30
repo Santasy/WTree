@@ -52,22 +52,21 @@
 #define WTREE_TARGET_NODE_BYTES 512
 #endif
 
-// Binary search thresholds: minimum number of elements to justify binary
-// search.
-// For complex key types (strings, objects), binary search is efficient
-// with fewer elements due to expensive comparisons.
-// For numeric key types (int, float), comparisons are cheap so linear
-// search with sequential memory access is preferred until
-// more elements are present.
-// Rationale: 32 is conservative for expensive comparisons; 256 compensates
-// for branch mispredictions on random probes of cache-resident numeric keys.
+// Binary search thresholds: minimum node fill (leaf) or fan-out (always-full
+// internal) that justifies binary search over the linear scan. A binary scan
+// of 8 slots costs ~3 comparisons against up to 8 for linear, so 8 keKys is
+// the break-even point; below it the short linear scan is cheaper and keeps
+// sequential memory access. Both classes share the value: key-type
+// complexity only re-tuned these two numbers (256/32), which made binary
+// search unreachable for every node size the W-tree derives below a 2 KB
+// target (k < 256 for numeric keys, k < 32 for typical complex keys).
 
 #ifndef WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX
-#define WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX 32
+#define WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX 16
 #endif
 
 #ifndef WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC
-#define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 256
+#define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 8
 #endif
 
 // === End of user setup ===

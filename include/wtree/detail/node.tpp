@@ -236,7 +236,7 @@ int WTreeNode<Params>::closed_binary_lower_bound_search(
                     // Multi: continue searching left for the first occurrence.
                     // Note: recursive call stays unbounded — the match
                     // guarantees the result will also be an exact match.
-                    left = binary_search(k, left, mid, comp);
+                    left = binary_lower_bound_search(k, left, mid, comp);
                     return left | kExactMatch;
                 }
             }
@@ -247,6 +247,15 @@ int WTreeNode<Params>::closed_binary_lower_bound_search(
                 right = mid;
             }
         }
+    }
+    // The closed loop exits on an unprobed converged slot (left == right):
+    // with a compare_to comp the locator trusts only the kExactMatch bit, so
+    // check that slot for equality before reporting the lower bound. The
+    // exclusion invariant (slots left of `left` compared < k) makes `left`
+    // the leftmost equal position, matching closed_linear's answer.
+    if constexpr(is_compare_to<Compare>()) {
+        if(comp(key(left), k) == 0)
+            return left | kExactMatch;
     }
     return left;
 }

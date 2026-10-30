@@ -98,6 +98,10 @@ struct WTreeCommonParams : public BalanceOptions {
     // Internal nodes are always full with kTargetK elements.
     static constexpr bool kUseBinarySearchForInternal =
         kTargetK >= kBinarySearchThreshold;
+    // Threshold 1 can force to use binary search: every non-empty leaf
+    // qualifies, so the leaf search methods take binary search directly and
+    // skip the runtime fill check.
+    static constexpr bool kUseBinarySearchForLeaf = kBinarySearchThreshold == 1;
 };
 
 /**
