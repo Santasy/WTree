@@ -87,6 +87,11 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     using typename Aliases::internal_allocator_traits;
     using typename Aliases::internal_allocator_type;
 
+    // Path-free positions: the node/slot found by a descent plus the parent
+    // link, for callers that never walk the ancestor stack.
+    using position_type = WTreePosition<node_type>;
+    using const_position_type = WTreePosition<const node_type>;
+
     using Aliases::kBasefieldsBytes;
     using Aliases::kInitialCapacity;
     using Aliases::kLastGrowth;
@@ -523,8 +528,10 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     /**
      * @brief Emplaces a value only if its key is absent, preferring
      * horizontal expansion (same-node growth) over structural changes.
-     * @details Must not route through internal_locate: insertion
-     * corrections are applied on the way down.
+     * @details Descends once with the locator and applies the space
+     * corrections at the leaf it lands on (grow, slide, split, or leaf→
+     * internal conversion), so the incoming value is forwarded by reference
+     * and constructed exactly once, at its final slot.
      * @return {iterator, true} on insertion, {iterator, false} if the key
      * already exists.
      */
@@ -758,6 +765,24 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         return std::make_pair(iter, result);
     }
 
+    // === Path-free locate (node/slot + parent link, no iterator) ===
+
+    /**
+     * @brief Locates -key- into a path-free position: leaves the node, slot
+     * and parent link in -pos- and returns the match code.
+     * @details Same early-stop descent as locate(), without building an
+     * iterator. Use it when only the position is needed (contains/count,
+     * erase-by-key).
+     */
+    int locate_position(const key_type &key, position_type &pos) const {
+        return m_locator.internal_locate_any(key, pos);
+    }
+
+    /** @brief Const-tree overload of @ref locate_position. */
+    int locate_position(const key_type &key, const_position_type &pos) const {
+        return m_locator.internal_locate_any(key, pos);
+    }
+
   private:
     // ================================
 
@@ -768,6 +793,9 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     // the one that was erased (or end() if none exists).
     template <typename Iterator> Iterator erase(Iterator &iter);
 
+    // Erase -key- without building an iterator. Returns 1 if it was erased.
+    int erase_key(const key_type &key);
+
     // Erases range. Returns the number of keys erased.
     template <typename Iterator> int erase(Iterator begin, Iterator end);
 
@@ -775,6 +803,13 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
   private:
     // === WTREE_PRIVATE_INTERNAL_FUNCTIONS ===
+
+    // Shared erase body. -pos- is a cursor over the slot to erase — a
+    // WTreeIterator (it keeps its ascendant path) or a path-free
+    // WTreePosition. Both provide node, index, ascend(), step_forward(),
+    // has_ascendant(), ascendant() and position(); the cursor is left just
+    // past the erased slot.
+    template <typename Cursor> void internal_erase(Cursor &pos);
 
     /**
      * @brief Advances an iterator past the last element of a child node by

@@ -55,13 +55,16 @@ class WTreeValidationUtils {
         using field_type = typename node_type::field_type;
         using key_type = typename node_type::key_type;
 
-        std::vector<node_type *> path(it.ascendants);
+        std::vector<node_type *> path;
+        path.reserve(it.path_size() + 1);
+        for(int i = 0; i < it.path_size(); ++i)
+            path.push_back(it.ascendant_at(i));
         path.push_back(it.node);
 
         bool is_correct = true;
-        const size_t size = it.ascendants.size();
+        const size_t size = it.path_size();
         for(size_t i_node = 0; i_node < size; ++i_node) {
-            node_type *node = it.ascendants[i_node];
+            node_type *node = it.ascendant_at(static_cast<int>(i_node));
             assert(node != nullptr);
 
             if(node->size() > node_type::kTargetK) {
@@ -145,8 +148,8 @@ class WTreeValidationUtils {
             return false;
 
         // Then validate values along the path.
-        for(size_t i_node = 0; i_node < it.ascendants.size(); ++i_node) {
-            node_type *node = it.ascendants[i_node];
+        for(size_t i_node = 0; i_node < it.path_size(); ++i_node) {
+            node_type *node = it.ascendant_at(static_cast<int>(i_node));
             for(field_type i = 0; i < node->size(); ++i) {
                 const value_type &entry = node->fields.values[i];
                 if(!validator(entry.first, entry.second)) {
@@ -159,8 +162,7 @@ class WTreeValidationUtils {
                                "failed.\n");
                     }
                     printf("On node %lu/%lu of path, index %lu\n",
-                           (ulong)i_node + 1, (ulong)it.ascendants.size(),
-                           (ulong)i);
+                           (ulong)i_node + 1, (ulong)it.path_size(), (ulong)i);
                     return false;
                 }
             }

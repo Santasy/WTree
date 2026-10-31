@@ -311,6 +311,141 @@ void test_reverse_iteration() {
     }
 }
 
+// Deep, narrow tree (kTargetK == 3) so an iterator's path outgrows its inline
+// storage: checks the overflow spill, plus the path-free locate/erase
+// primitives (contains, count, erase-by-key).
+void test_deep_path_and_position_ops() {
+    using SmallSet = WTreeLib::set<int, std::less<int>, std::allocator<int>,
+                                   16>; // kTargetK clamps to 3
+    SmallSet storage;
+
+    const int n = 5000;
+    for(int i = 0; i < n; ++i)
+        storage.insert(2 * i);
+
+    if(static_cast<int>(storage.height()) - 1 <=
+       SmallSet::iterator::kInlinePath) {
+        results.fail("Deep path - tree is not deep enough to spill");
+        return;
+    }
+    results.pass("Deep path - iterator path spills past inline storage");
+
+    // Forward iteration walks the spilled path (ascend/pop).
+    bool ordered = true;
+    int expected = 0;
+    for(auto it = storage.begin(); it != storage.end(); ++it, expected += 2) {
+        if(*it != expected) {
+            ordered = false;
+            break;
+        }
+    }
+    if(ordered && storage.size() == static_cast<size_t>(n)) {
+        results.pass("Deep path - in-order iteration");
+    } else {
+        results.fail("Deep path - in-order iteration");
+    }
+
+    // Path-free lookups.
+    const SmallSet &cstorage = storage;
+    bool lookups_ok = true;
+    for(int i = 0; i < n; i += 97) {
+        lookups_ok = lookups_ok && cstorage.contains(2 * i) &&
+                     cstorage.count(2 * i) == 1 &&
+                     cstorage.count(2 * i + 1) == 0;
+    }
+    lookups_ok =
+        lookups_ok && !cstorage.contains(-1) && !cstorage.contains(2 * n);
+    if(lookups_ok) {
+        results.pass("Deep path - path-free contains/count");
+    } else {
+        results.fail("Deep path - path-free contains/count");
+    }
+
+    // Path-free erase: every third key goes.
+    for(int i = 0; i < n; i += 3)
+        storage.erase(2 * i);
+
+    bool erased_ok = true;
+    for(int i = 0; i < n; ++i) {
+        const bool present = storage.contains(2 * i);
+        if(present != (i % 3 != 0)) {
+            erased_ok = false;
+            break;
+        }
+    }
+    const size_t expected_size = static_cast<size_t>(n) - (n + 2) / 3;
+    if(erased_ok && storage.size() == expected_size) {
+        results.pass("Deep path - erase-by-key");
+    } else {
+        results.fail("Deep path - erase-by-key");
+    }
+}
+
+// Worst case depth: in-order insertion degenerates the W-tree into a
+// near-linear chain (height ~ n/k, measured 1666 levels for k=3 and n=5000),
+// so the iterator path must survive depths far beyond its inline stack.
+void test_linear_height_path() {
+    using SmallSet = WTreeLib::set<int, std::less<int>, std::allocator<int>,
+                                   16>; // kTargetK clamps to 3
+    SmallSet storage;
+
+    const int n = 2000;
+    for(int i = 0; i < n; ++i)
+        storage.insert(i); // ascending: worst-case shape
+
+    const int depth = static_cast<int>(storage.height()) - 1;
+    if(depth <= 16 * SmallSet::iterator::kInlinePath) {
+        results.fail("Linear height - tree did not degenerate enough to spill",
+                     "depth=" + std::to_string(depth));
+        return;
+    }
+    results.pass("Linear height - path spills far past the inline stack");
+
+    bool ordered = true;
+    int expected = 0;
+    for(auto it = storage.begin(); it != storage.end(); ++it, ++expected) {
+        if(*it != expected) {
+            ordered = false;
+            break;
+        }
+    }
+    if(ordered && expected == n) {
+        results.pass("Linear height - forward iteration");
+    } else {
+        results.fail("Linear height - forward iteration");
+    }
+
+    bool reversed = true;
+    int back = n - 1;
+    for(auto it = storage.rbegin(); it != storage.rend(); ++it, --back) {
+        if(*it != back) {
+            reversed = false;
+            break;
+        }
+    }
+    if(reversed && back == -1) {
+        results.pass("Linear height - reverse iteration");
+    } else {
+        results.fail("Linear height - reverse iteration");
+    }
+
+    // Path-free locate/erase must not depend on the path depth either.
+    for(int i = 0; i < n; i += 2)
+        storage.erase(i);
+    bool erased_ok = true;
+    for(int i = 0; i < n; ++i) {
+        if(storage.contains(i) != (i % 2 != 0)) {
+            erased_ok = false;
+            break;
+        }
+    }
+    if(erased_ok && storage.size() == static_cast<size_t>(n / 2)) {
+        results.pass("Linear height - contains/erase-by-key");
+    } else {
+        results.fail("Linear height - contains/erase-by-key");
+    }
+}
+
 void test_begin_end_on_empty() {
     BaseSet storage;
 
@@ -615,6 +750,8 @@ int main() {
     test_iterator_traversal();
     test_reverse_iteration();
     test_begin_end_on_empty();
+    test_deep_path_and_position_ops();
+    test_linear_height_path();
     test_bounds();
     test_string_keys();
     test_hint_insert();

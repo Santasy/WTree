@@ -135,6 +135,9 @@ template <typename Tree> class WTreeContainer {
     using reverse_iterator = Tree::reverse_iterator;
     using const_reverse_iterator = Tree::const_reverse_iterator;
 
+    /// Path-free const position: node/slot + parent link, no iterator.
+    using const_position_type = Tree::const_position_type;
+
     static constexpr int kExactMatch = Tree::kExactMatch;
     static constexpr int kMatchMask = Tree::kMatchMask;
 
@@ -187,9 +190,8 @@ template <typename Tree> class WTreeContainer {
     // === Lookup routines (shared for unique and multi) ===
 
     bool contains(const key_type &key) const {
-        const_iterator iter(m_tree.croot(), 0);
-        auto res = m_tree.locate(key, iter);
-        return res.second == kExactMatch;
+        const_position_type pos(m_tree.croot(), 0);
+        return m_tree.locate_position(key, pos) == kExactMatch;
     }
 
     iterator lower_bound(const key_type &key) {

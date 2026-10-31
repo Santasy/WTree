@@ -46,6 +46,7 @@ class WTreeUniqueContainer : public WTreeContainer<Tree> {
 
     using typename super_type::iterator;
     using typename super_type::const_iterator;
+    using typename super_type::const_position_type;
 
     using super_type::kExactMatch;
     using super_type::kMatchMask;
@@ -108,9 +109,9 @@ class WTreeUniqueContainer : public WTreeContainer<Tree> {
     }
 
     size_type count(const key_type &key) const {
-        const_iterator iter(this->m_tree.croot(), 0);
-        auto res = this->m_tree.locate(key, iter);
-        return (res.second == Tree::kExactMatch) ? 1 : 0;
+        const_position_type pos(this->m_tree.croot(), 0);
+        const int result = this->m_tree.locate_position(key, pos);
+        return (result == kExactMatch) ? 1 : 0;
     }
 
     // === Insertion routines ===
@@ -162,14 +163,7 @@ class WTreeUniqueContainer : public WTreeContainer<Tree> {
 
     using super_type::erase; // Inherit erase(iter) and erase(range) from base.
 
-    int erase(const key_type &key) {
-        iterator iter(this->m_tree.root(), 0);
-        auto [_, i_result] = this->m_tree.locate(key, iter);
-        if(i_result != kExactMatch)
-            return 0;
-        this->m_tree.erase(iter);
-        return 1;
-    }
+    int erase(const key_type &key) { return this->m_tree.erase_key(key); }
 };
 
 } // namespace WTreeLib

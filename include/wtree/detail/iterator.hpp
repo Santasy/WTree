@@ -25,6 +25,7 @@
 #include <limits>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace WTreeLib {
 /**
@@ -72,9 +73,16 @@ class WTreeIterator {
     normal_node *node;
     // The index within the node of the tree the iterator is pointing at.
     int index;
-    // Vectors for ascendant path in search and remove routines.
-    std::vector<normal_node *> ascendants;
-    std::vector<field_type> move_indexes;
+    // Ascendant path for search/iteration/remove routines. The first
+    // kInlinePath levels live in the iterator itself so the common tree is
+    // allocation-free; any deeper level spills into overflow_path. Depth is
+    // unbounded in the worst case (in-order insertion degenerates the W-tree
+    // into a near-linear chain, height ~ n/k), and the overflow vector keeps
+    // that correct.
+    static constexpr int kInlinePath = 4;
+    path_vertex_type inline_path[kInlinePath];
+    std::vector<path_vertex_type> overflow_path;
+    int depth;
 
     template <typename> friend class WTree;
     template <typename> friend class WTreeNodeManager;
@@ -82,15 +90,15 @@ class WTreeIterator {
     friend iterator;
     friend const_iterator;
 
-    WTreeIterator() : node(nullptr), index(-1), ascendants(), move_indexes() {
+    WTreeIterator() : node(nullptr), index(-1), overflow_path(), depth(0) {
 #ifdef WTREE_DBG_ITERATORS
         std::cout << "Constructing iterator with no arguments.\n";
 #endif
     }
 
     WTreeIterator(Node *n, int p)
-        : node(const_cast<normal_node *>(n)), index(p), ascendants(),
-          move_indexes() {
+        : node(const_cast<normal_node *>(n)), index(p), overflow_path(),
+          depth(0) {
 #ifdef WTREE_DBG_ITERATORS
         std::cout << "Constructing iterator with initial node and index.\n";
 #endif
@@ -104,28 +112,45 @@ class WTreeIterator {
     // This is the normal-to-const iterator conversion.
     template <typename OtherNode, typename OtherRef, typename OtherPtr>
     WTreeIterator(const WTreeIterator<OtherNode, OtherRef, OtherPtr> &other)
-        : node(other.node), index(other.index), ascendants(other.ascendants),
-          move_indexes(other.move_indexes) {
+        : node(other.node), index(other.index),
+          overflow_path(other.overflow_path), depth(other.depth) {
+        for(int i = 0; i < depth && i < kInlinePath; ++i)
+            inline_path[i] = other.inline_path[i];
+        assert(stack_sizes_match());
 #ifdef WTREE_DBG_ITERATORS
         std::cout << "Constructing iterator from another const iterator.\n";
 #endif
     }
 
-    int path_size() const { return ascendants.size(); }
+    int path_size() const { return depth; }
+
+    // Ancestor at -level- (0 = root side of the recorded path) and the index
+    // of the node below it.
+    normal_node *ascendant_at(int level) const {
+        assert(level >= 0 && level < depth);
+        return level < kInlinePath ? inline_path[level].second
+                                   : overflow_path[level - kInlinePath].second;
+    }
+    field_type move_index_at(int level) const {
+        assert(level >= 0 && level < depth);
+        return level < kInlinePath ? inline_path[level].first
+                                   : overflow_path[level - kInlinePath].first;
+    }
 
     bool is_valid() { return node != nullptr; }
 
     int position() const noexcept {
-        return has_ascendant() ? move_indexes[path_size() - 1] : -1;
+        return has_ascendant() ? static_cast<int>(move_index_at(depth - 1))
+                               : -1;
     }
-    bool has_ascendant() const noexcept { return !ascendants.empty(); }
+    bool has_ascendant() const noexcept { return depth > 0; }
     normal_node *ascendant() const noexcept {
         assert(has_ascendant());
-        return ascendants[path_size() - 1];
+        return ascendant_at(depth - 1);
     }
 
     normal_node *safe_ascendant() const noexcept {
-        return has_ascendant() ? ascendants[path_size() - 1] : nullptr;
+        return has_ascendant() ? ascendant_at(depth - 1) : nullptr;
     }
 
     bool operator==(const const_iterator &x) const {
@@ -180,13 +205,12 @@ class WTreeIterator {
     }
 
     // Descent occurs into the child at position [from].
-    // See [descend_from_right(field_type from)] for the version that is used
+    // See [descend_to_right_side(field_type from)] for the version that is used
     // finding the path to the greatest key in leaves.
     void descend(field_type from) {
         assert(node->child(from) != nullptr);
 
-        ascendants.push_back(node);
-        move_indexes.push_back(from);
+        push_path(from);
         node = node->child(from);
 
         index = 0;
@@ -195,13 +219,15 @@ class WTreeIterator {
     void descend_to_right_side(field_type from) {
         assert(node->child(from) != nullptr);
 
-        ascendants.push_back(node);
-        move_indexes.push_back(from);
+        push_path(from);
         node = node->child(from);
 
         assert(node->size() > 0);
         index = node->size() - 1;
     }
+
+    // Moves one position forward, as operator++ does.
+    void step_forward() { ++(*this); }
 
   private:
     // Increment/decrement the iterator.
@@ -211,9 +237,26 @@ class WTreeIterator {
     void decrement();
     void decrement_by(size_t count);
 
+    void push_path(field_type from) {
+        if(depth < kInlinePath)
+            inline_path[depth] = path_vertex_type(from, node);
+        else
+            overflow_path.emplace_back(from, node);
+        ++depth;
+        assert(stack_sizes_match());
+    }
+
     void pop_stacks_unchecked() {
-        move_indexes.pop_back();
-        ascendants.pop_back();
+        if(depth > kInlinePath)
+            overflow_path.pop_back();
+        --depth;
+        assert(stack_sizes_match());
+    }
+
+    // Invariant: everything past the inline stack lives in the overflow stack.
+    bool stack_sizes_match() const {
+        return static_cast<int>(overflow_path.size()) ==
+               (depth > kInlinePath ? depth - kInlinePath : 0);
     }
 
     void internal_update_position() { node = ascendant()->child(position()); }

@@ -746,8 +746,8 @@ void WTreeNodeManager<Params>::internal_move_greatest_upward(iterator &iter) {
     }
     int level = 0;
     for(; level < iter.path_size() - 1; ++level) {
-        node_type *node = iter.ascendants[level];
-        const field_type pos = iter.move_indexes[level];
+        node_type *node = iter.ascendant_at(level);
+        const field_type pos = iter.move_index_at(level);
         const field_type src_end =
             std::min<field_type>(node->fields.size, kTargetK - 1);
         if(node->fields.size == kTargetK)
@@ -756,8 +756,8 @@ void WTreeNodeManager<Params>::internal_move_greatest_upward(iterator &iter) {
                             node->fields.values + src_end,
                             node->fields.values + pos + 2);
 
-        iter.ascendants[level + 1]->move_value(
-            iter.ascendants[level + 1]->size() - 1, node, pos + 1);
+        iter.ascendant_at(level + 1)->move_value(
+            iter.ascendant_at(level + 1)->size() - 1, node, pos + 1);
     }
     assert(iter.node != root());
     assert(iter.node->is_leaf());
@@ -798,8 +798,8 @@ void WTreeNodeManager<Params>::internal_move_smallest_upward(iterator &iter) {
     }
     int level = 0;
     for(; level < iter.path_size() - 1; ++level) {
-        node_type *node = iter.ascendants[level];
-        const field_type pos = iter.move_indexes[level];
+        node_type *node = iter.ascendant_at(level);
+        const field_type pos = iter.move_index_at(level);
         // Shift elements left by 1: [1, pos+1) -> [0, pos). The leftmost
         // boundary key of the node is the displaced one.
         node->destroy_value(0);
@@ -807,7 +807,7 @@ void WTreeNodeManager<Params>::internal_move_smallest_upward(iterator &iter) {
                             node->fields.values + pos + 1,
                             node->fields.values);
 
-        iter.ascendants[level + 1]->move_value(0, node, pos);
+        iter.ascendant_at(level + 1)->move_value(0, node, pos);
     }
     assert(iter.node != root());
     assert(iter.node->is_leaf());

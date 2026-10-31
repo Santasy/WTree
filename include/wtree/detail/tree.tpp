@@ -75,7 +75,7 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
     iterator it(root(), 0);
 
     if(m_locator.internal_locate_any(key, it) == static_cast<int>(kExactMatch))
-        return std::make_pair(it, false);
+        return std::make_pair(std::move(it), false);
 
     // R2: Node not full — emplace directly.
     if(it.node->size() < kTargetK)
@@ -102,7 +102,7 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
 
         if(correct_attempt) {
             m_manager.increment_size();
-            return std::make_pair(it, true);
+            return std::make_pair(std::move(it), true);
         }
 
         m_manager.make_child_internal_unchecked(it.ascendant(), it.position());
@@ -130,7 +130,7 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
     it.node->construct_value(0, std::forward<Args>(args)...);
     ++it.node->fields.size;
     m_manager.increment_size();
-    return std::make_pair(it, true);
+    return std::make_pair(std::move(it), true);
 };
 
 template <typename Params>
@@ -168,23 +168,25 @@ typename WTree<Params>::iterator WTree<Params>::emplace_hint_multi_key_args(
 // === WTREE_ERASE_ROUTINES ===
 
 template <typename P>
-template <typename Iterator>
-Iterator WTree<P>::erase(Iterator &iter) {
-    assert(iter != end());
+template <typename Cursor>
+void WTree<P>::internal_erase(Cursor &iter) {
+    assert(iter.node != nullptr);
+    assert(!(iter.node == root() &&
+             iter.index == static_cast<int>(root()->size())));
 
     if(iter.node->size() == 1) {
         if(iter.has_ascendant()) {
             m_manager.internal_destroy_child_unchecked(iter.ascendant(),
                                                        iter.position());
             iter.ascend();
-            ++iter;
+            iter.step_forward();
         } else {
             assert(iter.node == root());
             iter.node->destroy_value(0);
             --iter.node->fields.size;
         }
         m_manager.decrement_size();
-        return iter;
+        return;
     }
 
     if(iter.node->is_internal()) {
@@ -227,7 +229,8 @@ Iterator WTree<P>::erase(Iterator &iter) {
             }
 
             m_manager.decrement_size();
-            return ++iter;
+            iter.step_forward();
+            return;
         }
 
         child_lower_bound = iter.node->first_right_descendant(iter.index);
@@ -266,7 +269,7 @@ Iterator WTree<P>::erase(Iterator &iter) {
             }
 
             m_manager.decrement_size();
-            return iter;
+            return;
         }
 
         // At this point, it is certain that this node could be a leaf.
@@ -282,7 +285,23 @@ Iterator WTree<P>::erase(Iterator &iter) {
                                   iter.node->fields.values + iter.index);
     --iter.node->fields.size;
     m_manager.decrement_size();
+}
+
+template <typename P>
+template <typename Iterator>
+Iterator WTree<P>::erase(Iterator &iter) {
+    internal_erase(iter);
     return iter;
+}
+
+template <typename P>
+int WTree<P>::erase_key(const key_type &key) {
+    position_type pos(root(), 0);
+    if(locate_position(key, pos) != static_cast<int>(kExactMatch))
+        return 0;
+
+    internal_erase(pos);
+    return 1;
 }
 
 template <typename P>

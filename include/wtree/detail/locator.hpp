@@ -25,6 +25,60 @@
 
 namespace WTreeLib {
 /**
+ * @brief Path-free descent position: the found node and slot plus the parent
+ * link.
+ * @details Stands in for @ref WTreeIterator "WTreeIterator" in every descent
+ * whose caller never walks the ancestor stack (lookup, contains/count,
+ * erase-by-key), so those paths carry no iterator and no path storage. It
+ * satisfies the locator's IterType interface: `node`, `index`, `descend()` and
+ * `key()`.
+ * @tparam Node The node it points at (const or non-const).
+ */
+template <typename Node> struct WTreePosition {
+    using node_type = std::remove_const_t<Node>;
+    using field_type = typename node_type::field_type;
+    using key_type = typename node_type::key_type;
+
+    Node *node;
+    int index;
+    // Parent of -node- and its slot there; the single ancestor link that
+    // erase-by-key needs (nullptr when -node- is the root).
+    Node *parent;
+    int parent_index;
+
+    WTreePosition()
+        : node(nullptr), index(0), parent(nullptr), parent_index(0) {}
+    WTreePosition(Node *n, int i)
+        : node(n), index(i), parent(nullptr), parent_index(0) {}
+
+    void descend(field_type from) {
+        assert(node->child(from) != nullptr);
+        parent = node;
+        parent_index = from;
+        node = node->child(from);
+        index = 0;
+    }
+
+    const key_type &key() const { return node->key(index); }
+
+    bool has_ascendant() const noexcept { return parent != nullptr; }
+    Node *ascendant() const noexcept {
+        assert(parent != nullptr);
+        return parent;
+    }
+    int position() const noexcept { return parent_index; }
+
+    // Erase's "ascend then step past": the successor is never inspected on
+    // this path, so the grandparent link is not kept.
+    void ascend() noexcept {
+        node = parent;
+        index = parent_index;
+        parent = nullptr;
+    }
+    void step_forward() noexcept { ++index; }
+};
+
+/**
  * @brief Key-to-position descent routines, picking the search that matches
  * the key-comparison style of the instantiation.
  * @tparam Params A @ref WTree "WTree<Params>" instantiation.
@@ -99,7 +153,7 @@ class WTreeLocator : protected WTreeTypeAliases<Params> {
         // compare_keys normalizes the three-way result (compare-to) into the
         // containment test "key outside node key-range", so both compare
         // styles drive the ascent correctly.
-        auto s = iter.ascendants.size();
+        auto s = iter.path_size();
         while(s-- > 0) {
             assert(iter.node->size() > 0);
             if(compare_keys(key, iter.node->key(0))) {
