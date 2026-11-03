@@ -38,7 +38,10 @@ int main() {
     erase_even_strings<512>(100);
     erase_all_hashed_strings<512>(200);
     erase_all_ascending_strings<256>(100);
-    erase_all_ascending_strings<128>(100);
+    // 320 B is the smallest non-trivial step above the 256 B floor here: a
+    // map<string, string> value is 64 B, so 128 B could hold one value and the
+    // container now rejects (static_assert) any node below 3 values.
+    erase_all_ascending_strings<320>(100);
 
     results.summary();
     return results.all_passed() ? EXIT_SUCCESS : EXIT_FAILURE;

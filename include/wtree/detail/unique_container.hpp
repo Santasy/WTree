@@ -76,36 +76,36 @@ class WTreeUniqueContainer : public WTreeContainer<Tree> {
 
     // === Lookup routines (unique-specific) ===
 
+    // One iterator, descended in place: the returned iterator keeps its
+    // ancestor path (so ++it works) and nothing is copied on the way out.
     iterator find(const key_type &key) {
         iterator iter(this->m_tree.root(), 0);
-        auto [it, _] = this->m_tree.lower_bound(key, iter);
-        if(it != this->end()) {
-            if(!this->m_tree.locator()->compare_keys(key,
-                                                     params_type::get_key(*it)))
-                return it;
-        }
+        if(this->m_tree.lower_bound_in_place(key, iter) ==
+           static_cast<int>(kExactMatch))
+            return iter;
         return this->end();
     }
 
     const_iterator find(const key_type &key) const {
         const_iterator iter(this->m_tree.croot(), 0);
-        auto [it, _] = this->m_tree.lower_bound(key, iter);
-        if(it != this->cend()) {
-            if(!this->m_tree.clocator()->compare_keys(
-                   key, params_type::get_key(*it)))
-                return it;
-        }
+        if(this->m_tree.lower_bound_in_place(key, iter) ==
+           static_cast<int>(kExactMatch))
+            return iter;
         return this->cend();
     }
 
     iterator find_hint(const key_type &key, iterator it) {
-        auto [_, res] = this->m_tree.locate_hint(key, it);
-        return res == kExactMatch ? it : this->end();
+        if(this->m_tree.locate_hint_in_place(key, it) ==
+           static_cast<int>(kExactMatch))
+            return it;
+        return this->end();
     }
 
     const_iterator find_hint(const key_type &key, const_iterator it) const {
-        auto [_, res] = this->m_tree.locate_hint(key, it);
-        return res == kExactMatch ? it : this->cend();
+        if(this->m_tree.locate_hint_in_place(key, it) ==
+           static_cast<int>(kExactMatch))
+            return it;
+        return this->cend();
     }
 
     size_type count(const key_type &key) const {
@@ -128,14 +128,14 @@ class WTreeUniqueContainer : public WTreeContainer<Tree> {
 
     // Using iterators:
 
-    iterator insert(const_iterator hint, const value_type &x) {
+    iterator insert(const const_iterator &hint, const value_type &x) {
         return this->m_tree.insert_unique(hint, x);
     }
 
-    template <typename P> iterator insert(const_iterator hint, P &&x) {
+    template <typename P> iterator insert(const const_iterator &hint, P &&x) {
         return this->m_tree.insert_unique(hint, std::forward<P>(x));
     }
-    iterator insert(const_iterator hint, value_type &&x) {
+    iterator insert(const const_iterator &hint, value_type &&x) {
         return this->m_tree.insert_unique(hint, std::move(x));
     }
 
@@ -154,7 +154,7 @@ class WTreeUniqueContainer : public WTreeContainer<Tree> {
     }
 
     template <typename... Args>
-    iterator emplace_hint(const_iterator hint, Args &&...args) {
+    iterator emplace_hint(const const_iterator &hint, Args &&...args) {
         return this->m_tree.emplace_hint_unique(hint,
                                                 std::forward<Args>(args)...);
     }

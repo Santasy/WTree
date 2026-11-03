@@ -83,13 +83,13 @@ class WTreeMultiContainer : public WTreeContainer<Tree> {
         return this->m_tree.insert_multi(std::move(x));
     }
 
-    iterator insert(const_iterator hint, const value_type &x) {
+    iterator insert(const const_iterator &hint, const value_type &x) {
         return this->m_tree.insert_multi(hint, x);
     }
-    template <typename P> iterator insert(const_iterator hint, P &&x) {
+    template <typename P> iterator insert(const const_iterator &hint, P &&x) {
         return this->m_tree.insert_multi(hint, std::forward<P>(x));
     }
-    iterator insert(const_iterator hint, value_type &&x) {
+    iterator insert(const const_iterator &hint, value_type &&x) {
         return this->m_tree.insert_multi(hint, std::move(x));
     }
 
@@ -108,7 +108,7 @@ class WTreeMultiContainer : public WTreeContainer<Tree> {
     }
 
     template <typename... Args>
-    iterator emplace_hint(const_iterator hint, Args &&...args) {
+    iterator emplace_hint(const const_iterator &hint, Args &&...args) {
         return this->m_tree.emplace_hint_multi(hint,
                                                std::forward<Args>(args)...);
     }

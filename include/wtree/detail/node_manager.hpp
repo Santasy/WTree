@@ -217,17 +217,20 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
      */
     void internal_move_smallest_upward(iterator &iter);
 
-    template <typename IterType, typename... Args>
-    inline IterType internal_emplace_at(IterType &hint, Args &&...args);
+    // Emplace at the cursor's slot, treating its node as a leaf and trusting
+    // the position (no key search, bounds from the caller).
+    template <typename Cursor, typename... Args>
+    inline void internal_emplace_at(Cursor &hint, Args &&...args);
 
     /**
-     * @brief Emplaces exactly at the iterator's position, using the node as
+     * @brief Emplaces exactly at the cursor's position, using the node as
      * a leaf without further validation and growing it if necessary.
-     *
-     * @return Iterator to the emplaced element.
+     * @details The cursor is left at the inserted element. Works for both
+     * cursors (WTreeIterator and the path-free WTreePosition), so the
+     * balance routines can run without an iterator.
      */
-    template <typename... Args>
-    iterator internal_emplace_at_with_growth(iterator &it, Args &&...args);
+    template <typename Cursor, typename... Args>
+    void internal_emplace_at_with_growth(Cursor &it, Args &&...args);
 
     /**
      * @brief Slides elements from full leaf node to its right sibling v.
@@ -242,9 +245,8 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
      * @param it  Iterator at the full leaf. Updated to the inserted position.
      * @param args  Arguments forwarded to construct the new element.
      */
-    template <typename... Args>
-    void internal_balanced_slide_to_right_unchecked(iterator &it,
-                                                    Args &&...args);
+    template <typename Cursor, typename... Args>
+    void internal_balanced_slide_to_right_unchecked(Cursor &it, Args &&...args);
 
     /**
      * @brief Slides elements from full leaf node to its left sibling.
@@ -259,9 +261,8 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
      * @param it  Iterator at the full leaf. Updated to the inserted position.
      * @param args  Arguments forwarded to construct the new element.
      */
-    template <typename... Args>
-    void internal_balanced_slide_to_left_unchecked(iterator &it,
-                                                   Args &&...args);
+    template <typename Cursor, typename... Args>
+    void internal_balanced_slide_to_left_unchecked(Cursor &it, Args &&...args);
 
     /**
      * @brief Splits a full leaf by creating a new right sibling that does
@@ -281,8 +282,8 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
      * @param it  Iterator at the full leaf. Updated to the inserted position.
      * @param args  Arguments forwarded to construct the new element.
      */
-    template <typename... Args>
-    void internal_split_to_right_unchecked(iterator &it, Args &&...args);
+    template <typename Cursor, typename... Args>
+    void internal_split_to_right_unchecked(Cursor &it, Args &&...args);
 
     /**
      * @brief Splits a full leaf by creating a new left sibling that does
@@ -302,8 +303,8 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
      * @param it  Iterator at the full leaf. Updated to the inserted position.
      * @param args  Arguments forwarded to construct the new element.
      */
-    template <typename... Args>
-    void internal_split_to_left_unchecked(iterator &it, Args &&...args);
+    template <typename Cursor, typename... Args>
+    void internal_split_to_left_unchecked(Cursor &it, Args &&...args);
 
     /**
      * @brief Balanced slide into a sibling node.
@@ -312,27 +313,28 @@ class WTreeNodeManager : protected WTreeTypeAliases<Params> {
      * adjacent sibling v, distributing the (kTargetK + 1) logical elements
      * (u's keys + new key) across u, a parent pivot, and v.
      */
-    template <typename... Args>
-    bool attempt_emplace_with_balanced_slide(iterator &it,
+    template <typename Cursor, typename... Args>
+    bool attempt_emplace_with_balanced_slide(Cursor &it,
                                              Args &&...args) noexcept;
 
-    template <typename... Args>
-    bool attempt_emplace_with_balanced_split(iterator &it,
+    template <typename Cursor, typename... Args>
+    bool attempt_emplace_with_balanced_split(Cursor &it,
                                              Args &&...args) noexcept;
 
     /**
      * @brief Attempts to apply a balanced slide or split into a sibling node.
      * @details See the implementation for the specific sequence of attempts.
      */
-    template <typename... Args>
-    bool attempt_emplace_with_balanced_slide_and_split(iterator &it,
+    template <typename Cursor, typename... Args>
+    bool attempt_emplace_with_balanced_slide_and_split(Cursor &it,
                                                        Args &&...args) noexcept;
 
     // Handles insertion at the edge of a full internal node (index == 0 or
     // index == kTargetK). Displaces boundary keys downward following the
     // boundary child chain, then constructs the new value at the top.
+    // The iterator is left on the inserted element (it.index == boundary).
     template <typename... Args>
-    iterator emplace_edge_swap(iterator &it, Args &&...args);
+    void emplace_edge_swap(iterator &it, Args &&...args);
 
   private:
     // Destroys the live values of [0, size()) for non-trivially-destructible

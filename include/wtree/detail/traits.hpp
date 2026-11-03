@@ -65,8 +65,27 @@
 #define WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX 16
 #endif
 
+// Edge insertion at a full internal node rotates the boundary key down the
+// chain. For trivially copyable values a single descending pass carrying the
+// key in a local replaces the descend-then-ascend rotation (see
+// emplace_edge_swap). 0 forces the complex path for measurements.
+#ifndef WTREE_EDGE_SWAP_NUMERIC
+#define WTREE_EDGE_SWAP_NUMERIC 1
+#endif
+
+// Numeric keys: a linear scan of contiguous ints is cheaper than a binary one
+// until a node holds ~255 keys (measured: k=254 ties, k=510 binary wins by
+// ~30% on insert and ~35% on search; below k≈128 binary costs 20-45%).
 #ifndef WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC
-#define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 8
+#define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 255
+#endif
+
+// Initial byte budget of a fresh leaf (it grows x1.25 per step up to
+// WTREE_TARGET_NODE_BYTES). 0 = derive it from the target node size (the
+// library default: <=64 B nodes start at 16, larger ones at 64). Set it to
+// sweep the growth ratchet in the comparing microbench.
+#ifndef WTREE_TARGET_INITIAL_BYTES
+#define WTREE_TARGET_INITIAL_BYTES 0
 #endif
 
 // === End of user setup ===
@@ -121,10 +140,11 @@ struct WTreeBalanceOptions {
  * A change in these priorities must be carefully deliberated.
  */
 struct WTreeRulesAssumptions {
-    // Assumptions for efficient performance.
-    static const bool slide_over_split = true;
-    static const bool slide_to_right_first = true;
-    static const bool split_to_right_first = true;
+    // Assumptions for efficient performance. constexpr so the balance rules can
+    // be folded at compile time (HPC: no runtime read of a global).
+    static constexpr bool slide_over_split = true;
+    static constexpr bool slide_to_right_first = true;
+    static constexpr bool split_to_right_first = true;
 };
 
 template <typename Key, int TargetNodeBytes = WTREE_TARGET_NODE_BYTES,
@@ -172,25 +192,28 @@ struct WTreeSizeHelper {
      * @details First tries a small uchar field type; if the number of keys
      * exceeds uchar, a ushort type is used.
      */
+    /**
+     * @brief Keys per node that fit in -target_node_bytes- (no clamping).
+     * @details The caller rejects a too-small result at compile time
+     * (WTreeCommonParams asserts k >= 3), so the value is returned as is: a
+     * silent clamp to 3 would produce a node larger than the requested budget
+     * and leaves whose capacity is below the growth floor.
+     */
     template <typename ValType = value_type>
     static constexpr int determine_optimal_k(int target_node_bytes) {
-        if(target_node_bytes <= 0)
-            return 0;
-
         // Try with small field_type (uint8_t) first
         constexpr size_t small_base_size =
             calculate_aligned_base_size<unsigned char>();
         const int max_available_bytes = target_node_bytes - small_base_size;
         const int k_for_small_base = max_available_bytes / value_size;
         if(k_for_small_base < 255)
-            return k_for_small_base > 3 ? k_for_small_base : 3;
+            return k_for_small_base;
 
-        // Need larger field_type (uint16_t<) for k >= 255
+        // Need larger field_type (uint16_t) for k >= 255
         constexpr size_t large_base_size =
             calculate_aligned_base_size<unsigned short>();
         const int min_available_bytes = target_node_bytes - large_base_size;
-        const int k_for_big_base = min_available_bytes / value_size;
-        return k_for_big_base > 3 ? k_for_big_base : 3;
+        return min_available_bytes / value_size;
     }
 
     // N ->S + S/4
@@ -202,12 +225,18 @@ struct WTreeSizeHelper {
 
     // Initial node byte budget, cache-size inspired: a fresh leaf starts
     // small enough to stay L1-resident and grows by x1.25 from there.
-    //
-    // TODO: Could be a user-available macro value.
+    // WTREE_TARGET_INITIAL_BYTES overrides it (clamped to the target size);
+    // 0 keeps the derived default.
     static constexpr int determine_initial_bytes(int target_node_bytes) {
-        return target_node_bytes > 64    ? 64
-               : target_node_bytes >= 16 ? 16
-                                         : target_node_bytes;
+        if constexpr(WTREE_TARGET_INITIAL_BYTES > 0) {
+            return WTREE_TARGET_INITIAL_BYTES < target_node_bytes
+                       ? WTREE_TARGET_INITIAL_BYTES
+                       : target_node_bytes;
+        } else {
+            return target_node_bytes > 64    ? 64
+                   : target_node_bytes >= 16 ? 16
+                                             : target_node_bytes;
+        }
     }
 };
 

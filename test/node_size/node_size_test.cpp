@@ -25,15 +25,18 @@
  * @file node_size_test.cpp
  * @brief Node-size edge-case instantiation suite.
  *
- * Coverts the interplay between the requested node byte size
+ * Covers the interplay between the requested node byte size
  * (WTREE_TARGET_NODE_BYTES analog), the derived k (kTargetK) and the index
  * field type (uint8_t/uint16_t):
  *
- *  - kTargetK is clamped to a minimum of 3.
+ *  - a node must hold at least 3 values; a target size that cannot is rejected
+ *    at compile time (WTreeCommonParams static_assert), it is no longer
+ *    silently clamped to 3 keys with an oversized node.
+ *  - use_split additionally needs k >= 5 (the split sibling gets ceil(k/2)
+ *    slots, and a leaf below 3 cannot grow).
  *  - field_type must be able to represent kTargetK (flips at k >= 255).
- *  - when kTargetK > 3, a full node must fit in the requested byte budget
- *    (base_fields + kTargetK * sizeof(value_type) <= kTargetNodeBytes);
- *    at the clamped k == 3 the budget may be exceeded.
+ *  - a full node always fits the requested byte budget
+ *    (base_fields + kTargetK * sizeof(value_type) <= kTargetNodeBytes).
  *
  * Both compile-time invariants (static_assert) and a runtime insert/erase
  * battery across many target sizes and key types are exercised here.
@@ -71,8 +74,9 @@ template <typename SetType> constexpr bool node_size_invariants() {
     if(small_field != std::is_same_v<F, std::uint8_t>)
         return false;
 
-    // Fit invariant (holds whenever k is not clamped to the 3 minimum).
-    if(k > 3) {
+    // A full node always fits the requested budget now that k is no longer
+    // padded up to a 3-key minimum.
+    {
         constexpr size_t base =
             P::size_helper::template calculate_aligned_base_size<F>();
         constexpr size_t full =
@@ -83,13 +87,35 @@ template <typename SetType> constexpr bool node_size_invariants() {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Target sizes that are too small to hold 3 values must be rejected at compile
+// time, not clamped. Checked through the same arithmetic the container uses
+// (WTreeSizeHelper::determine_optimal_k) without instantiating a container, so
+// these static_asserts stay valid even though the instantiations are gone.
+// ---------------------------------------------------------------------------
+
+template <typename Key, int TargetBytes>
+constexpr bool holds_three_values =
+    WTreeSizeHelper<Key, TargetBytes>::determine_optimal_k(TargetBytes) >= 3;
+
+static_assert(!holds_three_values<int, 8>, "int/8 B should be rejected");
+static_assert(holds_three_values<int, 16>, "int/16 B holds exactly 3");
+static_assert(!holds_three_values<unsigned char, 4>, "uchar/4 B rejected");
+static_assert(holds_three_values<unsigned char, 8>, "uchar/8 B holds 4");
+static_assert(!holds_three_values<unsigned short, 8>, "ushort/8 B rejected");
+static_assert(!holds_three_values<unsigned long, 16>, "ulong/16 B rejected");
+static_assert(!holds_three_values<std::string, 64>,
+              "std::string/64 B rejected (one 32 B value fits, not three)");
+static_assert(holds_three_values<std::string, 128>,
+              "std::string/128 B holds exactly 3");
+
 // ============================================================================
 // Tag types mapping node byte sizes to container instantiations
 // ============================================================================
 
 template <int Target> struct IntSet {
-    using set_type = WTreeLib::set<int, std::less<int>, std::allocator<int>,
-                                   Target>;
+    using set_type =
+        WTreeLib::set<int, std::less<int>, std::allocator<int>, Target>;
     static constexpr const char *key_name = "int";
     static constexpr int target = Target;
 };
@@ -123,14 +149,17 @@ template <int Target> struct StrSet {
 };
 
 // Every instantiation in the runtime matrix must satisfy the invariants.
+// Only target sizes that hold at least 3 values: the smaller ones (IntSet<8>,
+// UcharSet<4>, UshortSet<8>, UlongSet<16>, StrSet<64>) are compile errors by
+// design, see the static_asserts above.
 using NodeSizeMatrix = std::tuple<
-    IntSet<8>, IntSet<16>, IntSet<17>, IntSet<32>, IntSet<64>, IntSet<128>,
-    IntSet<256>, IntSet<1020>, IntSet<1026>, IntSet<4096>,
-    UcharSet<4>, UcharSet<8>, UcharSet<64>, UcharSet<256>, UcharSet<512>,
-    UshortSet<8>, UshortSet<16>, UshortSet<64>, UshortSet<256>, UshortSet<512>,
+    IntSet<16>, IntSet<17>, IntSet<32>, IntSet<64>, IntSet<128>, IntSet<256>,
+    IntSet<1020>, IntSet<1026>, IntSet<4096>,
+    UcharSet<8>, UcharSet<64>, UcharSet<256>, UcharSet<512>,
+    UshortSet<16>, UshortSet<64>, UshortSet<256>, UshortSet<512>,
     UshortSet<1020>, UshortSet<1026>,
-    UlongSet<16>, UlongSet<64>, UlongSet<512>,
-    StrSet<64>, StrSet<512>>;
+    UlongSet<64>, UlongSet<512>,
+    StrSet<128>, StrSet<512>>;
 
 template <typename Matrix, size_t... I>
 constexpr bool check_matrix_invariants(std::index_sequence<I...>) {
@@ -241,7 +270,6 @@ int main() {
     results.pass("compile-time invariants for the whole matrix");
 
     bool ok = true;
-    ok &= run_battery<IntSet<8>>();
     ok &= run_battery<IntSet<16>>();
     ok &= run_battery<IntSet<17>>();
     ok &= run_battery<IntSet<32>>();
@@ -252,13 +280,11 @@ int main() {
     ok &= run_battery<IntSet<1026>>();
     ok &= run_battery<IntSet<4096>>();
 
-    ok &= run_battery<UcharSet<4>>();
     ok &= run_battery<UcharSet<8>>();
     ok &= run_battery<UcharSet<64>>();
     ok &= run_battery<UcharSet<256>>();
     ok &= run_battery<UcharSet<512>>();
 
-    ok &= run_battery<UshortSet<8>>();
     ok &= run_battery<UshortSet<16>>();
     ok &= run_battery<UshortSet<64>>();
     ok &= run_battery<UshortSet<256>>();
@@ -266,11 +292,10 @@ int main() {
     ok &= run_battery<UshortSet<1020>>();
     ok &= run_battery<UshortSet<1026>>();
 
-    ok &= run_battery<UlongSet<16>>();
     ok &= run_battery<UlongSet<64>>();
     ok &= run_battery<UlongSet<512>>();
 
-    ok &= run_battery<StrSet<64>>();
+    ok &= run_battery<StrSet<128>>();
     ok &= run_battery<StrSet<512>>();
 
     if(ok)

@@ -19,6 +19,7 @@
 #define _WTREE_MANAGER__T_
 
 #include "traits.hpp"
+#include "locator.hpp"
 #include "node_manager.hpp"
 
 #include <algorithm>
@@ -94,8 +95,7 @@ WTreeNodeManager<Params>::grow_leaf_and_shift_right(node_type *node,
 
     if(new_size <= node->capacity()) {
         // No reallocation: shift in-place.
-        move_values_to_node(node->fields.values,
-                            node->fields.values + old_size,
+        move_values_to_node(node->fields.values, node->fields.values + old_size,
                             node->fields.values + (new_size - old_size));
         return node;
     }
@@ -274,14 +274,15 @@ inline void WTreeNodeManager<Params>::move_values_to_blank_node(
 
 template <class Params>
 inline void WTreeNodeManager<Params>::move_values_to_node(value_type *first,
-                                                         value_type *last,
-                                                         value_type *dest) {
+                                                          value_type *last,
+                                                          value_type *dest) {
     const size_t count = static_cast<size_t>(last - first);
     if(count == 0 || dest == first)
         return;
 
     if constexpr(std::is_trivially_copyable_v<value_type>) {
-        std::memmove(static_cast<void *>(dest), static_cast<const void *>(first),
+        std::memmove(static_cast<void *>(dest),
+                     static_cast<const void *>(first),
                      count * sizeof(value_type));
         return;
     }
@@ -319,19 +320,18 @@ inline void WTreeNodeManager<Params>::move_values_to_node(value_type *first,
 // === Emplace ===
 
 template <class Params>
-template <typename IterType, typename... Args>
-inline IterType WTreeNodeManager<Params>::internal_emplace_at(IterType &hint,
-                                                              Args &&...args) {
+template <typename Cursor, typename... Args>
+inline void WTreeNodeManager<Params>::internal_emplace_at(Cursor &hint,
+                                                          Args &&...args) {
     hint.node->internal_emplace_as_leaf(hint.index,
                                         std::forward<Args>(args)...);
     increment_size();
-    return hint;
 }
 
 template <class Params>
-template <typename... Args>
-inline typename WTreeNodeManager<Params>::iterator
-WTreeNodeManager<Params>::internal_emplace_at_with_growth(iterator &it,
+template <typename Cursor, typename... Args>
+inline void
+WTreeNodeManager<Params>::internal_emplace_at_with_growth(Cursor &it,
                                                           Args &&...args) {
     assert(it.node != nullptr);
     assert(it.node->size() < kTargetK);
@@ -343,15 +343,15 @@ WTreeNodeManager<Params>::internal_emplace_at_with_growth(iterator &it,
         it.node = grow_leaf(it.node);
         it.ascendant()->set_child(it.position(), it.node);
     }
-    return internal_emplace_at(it, std::forward<Args>(args)...);
+    internal_emplace_at(it, std::forward<Args>(args)...);
 }
 
 // === Balance: slide/split on a full leaf ===
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 void WTreeNodeManager<Params>::internal_balanced_slide_to_left_unchecked(
-    iterator &it, Args &&...args) {
+    Cursor &it, Args &&...args) {
     node_type *p = it.ascendant();
     const field_type pi = it.position();
     node_type *sibling = p->child(pi - 1);
@@ -432,9 +432,9 @@ void WTreeNodeManager<Params>::internal_balanced_slide_to_left_unchecked(
 }
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 void WTreeNodeManager<Params>::internal_balanced_slide_to_right_unchecked(
-    iterator &it, Args &&...args) {
+    Cursor &it, Args &&...args) {
     node_type *p = it.ascendant();
     const field_type pi = it.position();
     node_type *sibling = p->child(pi + 1);
@@ -498,9 +498,9 @@ void WTreeNodeManager<Params>::internal_balanced_slide_to_right_unchecked(
 }
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 void WTreeNodeManager<Params>::internal_split_to_left_unchecked(
-    iterator &it, Args &&...args) {
+    Cursor &it, Args &&...args) {
     node_type *p = it.ascendant();
     const field_type pi = it.position();
     auto *const node_vals = it.node->fields.values;
@@ -564,9 +564,9 @@ void WTreeNodeManager<Params>::internal_split_to_left_unchecked(
 }
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 void WTreeNodeManager<Params>::internal_split_to_right_unchecked(
-    iterator &it, Args &&...args) {
+    Cursor &it, Args &&...args) {
     node_type *p = it.ascendant();
     const field_type pi = it.position();
     auto *const node_vals = it.node->fields.values;
@@ -621,9 +621,9 @@ void WTreeNodeManager<Params>::internal_split_to_right_unchecked(
 }
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 bool WTreeNodeManager<Params>::attempt_emplace_with_balanced_slide(
-    iterator &it, Args &&...args) noexcept {
+    Cursor &it, Args &&...args) noexcept {
     assert(it.node != nullptr);
     assert(it.node->is_leaf());
     assert(it.has_ascendant());
@@ -651,9 +651,9 @@ bool WTreeNodeManager<Params>::attempt_emplace_with_balanced_slide(
 }
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 bool WTreeNodeManager<Params>::attempt_emplace_with_balanced_split(
-    iterator &it, Args &&...args) noexcept {
+    Cursor &it, Args &&...args) noexcept {
 
     assert(it.node != nullptr);
     assert(it.node->is_leaf());
@@ -686,9 +686,9 @@ bool WTreeNodeManager<Params>::attempt_emplace_with_balanced_split(
 }
 
 template <typename Params>
-template <typename... Args>
+template <typename Cursor, typename... Args>
 bool WTreeNodeManager<Params>::attempt_emplace_with_balanced_slide_and_split(
-    iterator &it, Args &&...args) noexcept {
+    Cursor &it, Args &&...args) noexcept {
     assert(it.node != nullptr);
     assert(it.node->is_leaf());
     assert(it.has_ascendant());
@@ -804,8 +804,7 @@ void WTreeNodeManager<Params>::internal_move_smallest_upward(iterator &iter) {
         // boundary key of the node is the displaced one.
         node->destroy_value(0);
         move_values_to_node(node->fields.values + 1,
-                            node->fields.values + pos + 1,
-                            node->fields.values);
+                            node->fields.values + pos + 1, node->fields.values);
 
         iter.ascendant_at(level + 1)->move_value(0, node, pos);
     }
@@ -814,8 +813,7 @@ void WTreeNodeManager<Params>::internal_move_smallest_upward(iterator &iter) {
 
     iter.ascendant()->destroy_value(0);
     move_values_to_node(iter.ascendant()->fields.values + 1,
-                        iter.ascendant()->fields.values +
-                            iter.position() + 1,
+                        iter.ascendant()->fields.values + iter.position() + 1,
                         iter.ascendant()->fields.values);
     iter.node->move_value(0, iter.ascendant(), iter.position());
     if(iter.node->size() == 1) {
@@ -831,17 +829,121 @@ void WTreeNodeManager<Params>::internal_move_smallest_upward(iterator &iter) {
 }
 
 // === Edge insertion at a full internal node ===
+//
+// Inserting at index 0 or kTargetK of a full internal node displaces the
+// boundary key: every level of the boundary chain trades its boundary key for
+// the one above it, the deepest node passes its key into a child that has
+// room, and the top node receives the new key. Two implementations of the
+// same rotation:
+//
+//   numeric (trivially copyable value): one descending pass carrying the
+//   boundary key in a local; plain node pointers, no ancestor path, no
+//   ascending. Built for the HPC case where the key is a register-sized int.
+//
+//   complex type: descend with the iterator, place
+//   the displaced key at the bottom, then ascend moving each parent boundary
+//   key down. It moves instead of copying every value (and never duplicates
+//   one), which is what a std::string or a pair pays for.
 
 template <class Params>
 template <typename... Args>
-inline typename WTreeNodeManager<Params>::iterator
-WTreeNodeManager<Params>::emplace_edge_swap(iterator &it, Args &&...args) {
+inline void WTreeNodeManager<Params>::emplace_edge_swap(iterator &it,
+                                                        Args &&...args) {
     assert(it.node->is_internal());
     assert(it.node->size() == kTargetK);
     assert(it.index == 0 || it.index == kTargetK);
 
     const field_type swap_idx = (it.index == 0) ? 0 : kTargetK - 1;
     const field_type child_idx = (it.index == 0) ? 0 : kTargetK - 2;
+    node_type *const top = it.node;
+
+    // Trivially copyable + swappable: the rotation is a plain local trade.
+    if constexpr(WTREE_EDGE_SWAP_NUMERIC && params_type::is_numeric_key &&
+                 std::is_trivially_copyable_v<value_type> &&
+                 std::is_swappable_v<value_type>) {
+        // --- Numeric: descend once with the displaced key in a local. ---
+
+        // Deepest full-internal node (p) on the boundary chain.
+        node_type *p = top;
+        int levels = 0;
+        for(node_type *c = p->child(child_idx);
+            c != nullptr && !c->is_leaf() && c->size() == kTargetK;
+            c = c->child(child_idx)) {
+            p = c;
+            ++levels;
+        }
+
+        // Trade the top boundary key down every level above p. p keeps its
+        // own boundary key: the bottom correction uses it as the pivot / the
+        // value to place.
+        value_type carry = top->fields.values[swap_idx];
+        if(levels > 0) {
+            for(node_type *c = top->child(child_idx); c != p;
+                c = c->child(child_idx))
+                std::swap(c->fields.values[swap_idx], carry);
+        }
+
+        // Bottom: make room for the last displaced key.
+        node_type *bottom = p->child(child_idx);
+        if(bottom == nullptr) {
+            // No child. Create a new leaf.
+            node_type *leaf = new_leaf_node(kInitialCapacity);
+            p->set_child(child_idx, leaf);
+            p->move_value(swap_idx, leaf, 0);
+            leaf->fields.size = 1;
+        } else {
+            // Path-free cursor one level down:
+            WTreePosition<node_type> pos(p, 0);
+            pos.descend(child_idx);
+            if(swap_idx != 0)
+                pos.index = pos.node->size();
+
+            if(bottom->size() < kTargetK) {
+                // Child has space.
+                internal_emplace_at_with_growth(
+                    pos, std::move(p->fields.values[swap_idx]));
+                decrement_size(); // Correction for the later addition.
+            } else {
+                bool correct_attempt = false;
+                if constexpr(params_type::use_slide && params_type::use_split) {
+                    correct_attempt =
+                        attempt_emplace_with_balanced_slide_and_split(
+                            pos, std::move(p->fields.values[swap_idx]));
+                } else if constexpr(params_type::use_slide) {
+                    correct_attempt = attempt_emplace_with_balanced_slide(
+                        pos, std::move(p->fields.values[swap_idx]));
+                } else if constexpr(params_type::use_split) {
+                    correct_attempt = attempt_emplace_with_balanced_split(
+                        pos, std::move(p->fields.values[swap_idx]));
+                }
+
+                if(!correct_attempt) {
+                    // Create new child.
+                    make_child_internal_unchecked(p, child_idx);
+                    node_type *inner = p->child(child_idx);
+                    node_type *leaf = new_leaf_node(kInitialCapacity);
+                    inner->set_child(child_idx, leaf);
+                    inner->move_value(swap_idx, leaf, 0);
+                    leaf->fields.size = 1;
+                    p->move_value(swap_idx, inner, swap_idx);
+                }
+            }
+        }
+
+        // Close the two holes: p takes the value carried down from above (if
+        // any level was crossed), the top takes the new key. Trivially
+        // copyable, so a plain assignment is the whole operation.
+        if(levels > 0)
+            p->fields.values[swap_idx] = std::move(carry);
+        // Trivially copyable, so constructing over the old boundary key (which
+        // the rotation already consumed) is a plain placement-new.
+        top->construct_value(swap_idx, std::forward<Args>(args)...);
+        it.index = swap_idx;
+        increment_size();
+        return;
+    }
+
+    // === Complex: original two-pass rotation (descend, then ascend). ===
 
     // Phase 1: Descend while boundary child exists and is full internal.
     int levels = 0;
@@ -861,7 +963,6 @@ WTreeNodeManager<Params>::emplace_edge_swap(iterator &it, Args &&...args) {
     if(child != nullptr) {
         if(child->size() < kTargetK) {
             // Leaf child has space — insert directly.
-            // it.node->move_value(swap_idx, child, swap_idx);
             if(swap_idx == 0) {
                 it.descend(0);
             } else {
@@ -875,7 +976,6 @@ WTreeNodeManager<Params>::emplace_edge_swap(iterator &it, Args &&...args) {
             it.node->destroy_value(swap_idx);
         } else {
             // Full leaf child.
-
             if(swap_idx == 0) {
                 it.descend(0);
             } else {
@@ -930,7 +1030,6 @@ WTreeNodeManager<Params>::emplace_edge_swap(iterator &it, Args &&...args) {
     it.node->construct_value(swap_idx, std::forward<Args>(args)...);
     it.index = swap_idx;
     increment_size();
-    return it;
 }
 
 } // namespace WTreeLib

@@ -575,12 +575,12 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     // amortized constant time. If not, the insertion will take amortized
     // logarithmic time as if a call to emplace_unique(v) were made.
     template <typename... Args>
-    iterator emplace_hint_unique_key_args(const_iterator hint,
+    iterator emplace_hint_unique_key_args(const const_iterator &hint,
                                           const key_type &key, Args &&...args);
 
     // Single-argument emplace with hint: extract key directly when possible.
     template <typename P>
-    iterator emplace_hint_unique(const_iterator hint, P &&x) {
+    iterator emplace_hint_unique(const const_iterator &hint, P &&x) {
         using extract_tag = WTreeCanExtractKey<P, key_type>;
         if constexpr(std::is_base_of_v<WTreeExtractKeySelfTag, extract_tag>) {
             return emplace_hint_unique_key_args(hint, x, std::forward<P>(x));
@@ -599,14 +599,14 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     template <typename First, typename Second>
     std::enable_if<WTreeCanExtractMapKey<First, key_type, value_type>::value,
                    iterator>::type
-    emplace_hint_unique(const_iterator hint, First &&f, Second &&s) {
+    emplace_hint_unique(const const_iterator &hint, First &&f, Second &&s) {
         return emplace_hint_unique_key_args(hint, f, std::forward<First>(f),
                                             std::forward<Second>(s));
     }
 
     // Variadic emplace with hint fallback: construct value, then extract key.
     template <typename... Args>
-    iterator emplace_hint_unique(const_iterator hint, Args &&...args) {
+    iterator emplace_hint_unique(const const_iterator &hint, Args &&...args) {
         value_type v(std::forward<Args>(args)...);
         return emplace_hint_unique_key_args(hint, params_type::get_key(v),
                                             std::move(v));
@@ -620,11 +620,11 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         return emplace_unique_key_args(params_type::get_key(v), v);
     }
 
-    iterator insert_unique(const_iterator hint, value_type &&v) {
+    iterator insert_unique(const const_iterator &hint, value_type &&v) {
         return emplace_hint_unique_key_args(hint, params_type::get_key(v),
                                             std::move(v));
     }
-    iterator insert_unique(const_iterator hint, const value_type &v) {
+    iterator insert_unique(const const_iterator &hint, const value_type &v) {
         return emplace_hint_unique_key_args(hint, params_type::get_key(v), v);
     }
 
@@ -641,7 +641,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
                   typename std::remove_const<
                       typename std::remove_reference<P>::type>::type,
                   value_type>::value>::type>
-    iterator insert_unique(const_iterator hint, P &&x) {
+    iterator insert_unique(const const_iterator &hint, P &&x) {
         return emplace_hint_unique(hint, std::forward<P>(x));
     }
 
@@ -657,11 +657,11 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     }
 
     template <typename... Args>
-    iterator emplace_hint_multi_key_args(const_iterator hint,
+    iterator emplace_hint_multi_key_args(const const_iterator &hint,
                                          const key_type &key, Args &&...args);
 
     template <typename... Args>
-    iterator emplace_hint_multi(const_iterator hint, Args &&...args) {
+    iterator emplace_hint_multi(const const_iterator &hint, Args &&...args) {
         value_type v(std::forward<Args>(args)...);
         return emplace_hint_multi_key_args(hint, params_type::get_key(v),
                                            std::move(v));
@@ -673,10 +673,10 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     iterator insert_multi(value_type &&v) {
         return emplace_multi_key_args(params_type::get_key(v), std::move(v));
     }
-    iterator insert_multi(const_iterator hint, const value_type &v) {
+    iterator insert_multi(const const_iterator &hint, const value_type &v) {
         return emplace_hint_multi_key_args(hint, params_type::get_key(v), v);
     }
-    iterator insert_multi(const_iterator hint, value_type &&v) {
+    iterator insert_multi(const const_iterator &hint, value_type &&v) {
         return emplace_hint_multi_key_args(hint, params_type::get_key(v),
                                            std::move(v));
     }
@@ -693,7 +693,7 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
                   typename std::remove_const<
                       typename std::remove_reference<P>::type>::type,
                   value_type>::value>::type>
-    iterator insert_multi(const_iterator hint, P &&x) {
+    iterator insert_multi(const const_iterator &hint, P &&x) {
         return emplace_hint_multi(hint, std::forward<P>(x));
     }
 
@@ -705,44 +705,76 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     // lower_bound and upper_bound are the same for unique and multi containers.
     // They wrap the internal descent methods.
 
+    // In-place forms: the caller owns the only iterator, so a bound costs no
+    // iterator copy. Return the locator's match code.
+    template <typename IterType>
+    int lower_bound_in_place(const key_type &key, IterType &iter) {
+        const int result = m_locator.internal_lower_bound(key, iter);
+        internal_end(iter);
+        return result;
+    }
+
+    template <typename IterType>
+    int lower_bound_in_place(const key_type &key, IterType &iter) const {
+        const int result = m_locator.internal_lower_bound(key, iter);
+        internal_end(iter);
+        return result;
+    }
+
+    template <typename IterType>
+    int upper_bound_in_place(const key_type &key, IterType &iter) {
+        const int result = m_locator.internal_upper_bound(key, iter);
+        internal_end(iter);
+        return result;
+    }
+
+    template <typename IterType>
+    int upper_bound_in_place(const key_type &key, IterType &iter) const {
+        const int result = m_locator.internal_upper_bound(key, iter);
+        internal_end(iter);
+        return result;
+    }
+
     template <typename IterType>
     std::pair<IterType, int> lower_bound(const key_type &key, IterType &iter) {
-        const int result = m_locator.internal_lower_bound(key, iter);
-        return {internal_end(iter), result};
+        const int result = lower_bound_in_place(key, iter);
+        return {std::move(iter), result};
     }
 
     template <typename IterType>
     std::pair<IterType, int> lower_bound(const key_type &key,
                                          IterType &iter) const {
-        const int result = m_locator.internal_lower_bound(key, iter);
-        return {internal_end(iter), result};
+        const int result = lower_bound_in_place(key, iter);
+        return {std::move(iter), result};
     }
 
     template <typename IterType>
     std::pair<IterType, int> upper_bound(const key_type &key, IterType &iter) {
-        const int result = m_locator.internal_upper_bound(key, iter);
-        return {internal_end(iter), result};
+        const int result = upper_bound_in_place(key, iter);
+        return {std::move(iter), result};
     }
 
     template <typename IterType>
     std::pair<IterType, int> upper_bound(const key_type &key,
                                          IterType &iter) const {
-        const int result = m_locator.internal_upper_bound(key, iter);
-        return {internal_end(iter), result};
+        const int result = upper_bound_in_place(key, iter);
+        return {std::move(iter), result};
     }
 
     template <typename IterType>
     std::pair<IterType, int> lower_bound_hint(const key_type &key,
                                               IterType &iter) {
         const int result = m_locator.internal_lower_bound_hint(key, iter);
-        return {internal_end(iter), result};
+        internal_end(iter);
+        return {std::move(iter), result};
     }
 
     template <typename IterType>
     std::pair<IterType, int> upper_bound_hint(const key_type &key,
                                               IterType &iter) {
         const int result = m_locator.internal_upper_bound_hint(key, iter);
-        return {internal_end(iter), result};
+        internal_end(iter);
+        return {std::move(iter), result};
     }
     // === Shared locate (early-stop descent) ===
     // Used by containers for count/contains. Returns (iterator, match_flag).
@@ -752,17 +784,16 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
     // From root, descend only.
 
+    // In place: the caller keeps (and needs) the one iterator, so no copy of
+    // its ancestor path is made for the return value.
     template <typename IterType>
-    std::pair<IterType, int> locate(const key_type &key, IterType &iter) const {
-        const int result = m_locator.internal_locate_any(key, iter);
-        return std::make_pair(iter, result);
+    int locate_in_place(const key_type &key, IterType &iter) const {
+        return m_locator.internal_locate_any(key, iter);
     }
 
     template <typename IterType>
-    std::pair<IterType, int> locate_hint(const key_type &key,
-                                         IterType &iter) const {
-        const int result = m_locator.internal_locate_any_hint(key, iter);
-        return std::make_pair(iter, result);
+    int locate_hint_in_place(const key_type &key, IterType &iter) const {
+        return m_locator.internal_locate_any_hint(key, iter);
     }
 
     // === Path-free locate (node/slot + parent link, no iterator) ===
@@ -814,24 +845,24 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
     /**
      * @brief Advances an iterator past the last element of a child node by
      * ascending to its parent and moving one position forward.
+     * @details In place: the caller owns the only iterator, so returning it
+     * would copy its ancestor path.
      */
-    template <typename Iterator> Iterator internal_end(Iterator &iter) {
+    template <typename Iterator> void internal_end(Iterator &iter) {
         if(iter.index == iter.node->size() && iter.has_ascendant()) {
             iter.ascend();
             ++iter.index;
         }
-        return iter;
     }
 
     /**
      * @brief Const version of internal_end.
      */
-    template <typename Iterator> Iterator internal_end(Iterator &iter) const {
+    template <typename Iterator> void internal_end(Iterator &iter) const {
         if(iter.index == iter.node->size() && iter.has_ascendant()) {
             iter.ascend();
             ++iter.index;
         }
-        return iter;
     }
 
     // Accumulate node statistics for the subtree at -node-, walking with an
@@ -877,10 +908,10 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         }
     }
 
-    // Inserts a value into the WTree immediately before iter. Requires that
-    // key(v) <= iter.key() and (--iter).key() <= key(v).
-    template <typename IterType, typename... Args>
-    IterType internal_emplace_at(IterType &hint, Args &&...args);
+    // Inserts a value into the WTree immediately before the cursor. Requires
+    // that key(v) <= cursor.key() and (--cursor).key() <= key(v).
+    template <typename Cursor, typename... Args>
+    void internal_emplace_at(Cursor &hint, Args &&...args);
 
     // =====================================================================
     // Find — lower_bound + equality check. Shared logic, works for both

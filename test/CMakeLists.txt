@@ -18,6 +18,7 @@
 #   7. container_semantics_test — copy/move/swap + balance policies (WTree+STD)
 #   8. node_size_test          — kTargetK vs node bytes vs field_type
 #   9. manager_test            — manager-layer relocations (movers + shifts)
+#  10. edge_swap_test          — boundary-key rotation at full internal nodes
 #
 # Analysis suites (label ANALYSIS_TEST, gated by WTREE_BUILD_ANALYSIS_TESTS):
 #  10. set_stress_test         — massive inserts, multi byte-size keys
@@ -160,6 +161,9 @@ create_wtree_test(node_size_test            node_size             LABELS core)
 
 # 9: Manager-layer relocations (movers / in-node shifts)
 create_wtree_test(manager_test              manager               LABELS core)
+# 10. edge_swap_test — boundary-key rotation at full internal nodes (both
+#     edges, both rotations, uint8/uint16 field, balance matrix)
+create_wtree_test(edge_swap_test            edge_swap             LABELS core)
 
 # === Register analysis suites (opt-in) ===
 
@@ -197,6 +201,7 @@ set(ALL_DEBUG_TARGETS
     container_semantics_test_debug
     node_size_test_debug
     manager_test_debug
+    edge_swap_test_debug
 )
 
 if(WTREE_BUILD_ANALYSIS_TESTS)

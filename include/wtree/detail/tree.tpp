@@ -44,16 +44,12 @@ WTree<Params>::WTree(const key_compare &comp, const allocator_type &alloc)
 
     size_t real_bytes = sizeof(leaf_fields_type);
     if(real_bytes > kTargetNodeBytes) {
-        if(kInitialCapacity == 3) {
-            std::printf(
-                "\t[WARNING] Nodes are %lu bytes instead of %u bytes to "
-                "have 3 values.\n",
-                real_bytes, kTargetNodeBytes);
-        } else {
-            std::printf("\t[ERROR] Nodes are %lu bytes, exceeding target of %u "
-                        "bytes!\n",
-                        real_bytes, kTargetNodeBytes);
-        }
+        // k is derived from the byte budget, so only struct tail padding can
+        // push a full node over it (a target too small for 3 values is a
+        // compile error in WTreeCommonParams).
+        std::printf("\t[WARNING] Nodes are %lu bytes, exceeding target of %u "
+                    "bytes (tail padding).\n",
+                    real_bytes, kTargetNodeBytes);
     } else if(real_bytes < kTargetNodeBytes) {
         std::printf(
             "\t[INFO] Nodes are %lu bytes (%u bytes unused of %u target).\n",
@@ -77,13 +73,14 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
     if(m_locator.internal_locate_any(key, it) == static_cast<int>(kExactMatch))
         return std::make_pair(std::move(it), false);
 
-    // R2: Node not full — emplace directly.
-    if(it.node->size() < kTargetK)
-        return std::make_pair(m_manager.internal_emplace_at_with_growth(
-                                  it, std::forward<Args>(args)...),
-                              true);
+    // R2: Node not full; emplace directly.
+    if(it.node->size() < kTargetK) {
+        m_manager.internal_emplace_at_with_growth(it,
+                                                  std::forward<Args>(args)...);
+        return std::make_pair(std::move(it), true);
+    }
 
-    // Full leaf — try balanced slide (R3), then convert to internal.
+    // Full leaf: try balanced slide (R3), then convert to internal.
     if(it.node->is_leaf()) {
         assert(it.has_ascendant());
 
@@ -114,13 +111,10 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
     assert(it.node->size() == kTargetK);
 
     // Edge cases. Displace boundary key via descendant chain.
-    if(it.index == 0)
-        return std::make_pair(
-            m_manager.emplace_edge_swap(it, std::forward<Args>(args)...), true);
-
-    if(it.index == kTargetK)
-        return std::make_pair(
-            m_manager.emplace_edge_swap(it, std::forward<Args>(args)...), true);
+    if(it.index == 0 || it.index == kTargetK) {
+        m_manager.emplace_edge_swap(it, std::forward<Args>(args)...);
+        return std::make_pair(std::move(it), true);
+    }
 
     // Mid-range: child(index-1) must be null (lower_bound would have
     // descended).
@@ -136,11 +130,9 @@ WTree<Params>::emplace_unique_key_args(const key_type &key,
 template <typename Params>
 template <typename... Args>
 typename WTree<Params>::iterator WTree<Params>::emplace_hint_unique_key_args(
-    const_iterator hint, const key_type &key, Args &&...args) {
+    const const_iterator &hint, const key_type &key, Args &&...args) {
     (void)hint;
-    // TODO(perf): leverage the hint for amortized-constant placement. For
-    // now the hint is ignored and a full logarithmic search+insert is done,
-    // which preserves std semantics (hint affects only complexity).
+    // TODO(perf): leverage the hint for amortized-constant placement.
     return emplace_unique_key_args(key, std::forward<Args>(args)...).first;
 }
 
@@ -151,13 +143,14 @@ WTree<Params>::emplace_multi_key_args(const key_type &key, Args &&...args) {
     iterator iter = iterator(root(), 0);
     // TODO:
     assert(0);
-    return internal_emplace_at(iter, std::forward<Args>(args)...);
+    internal_emplace_at(iter, std::forward<Args>(args)...);
+    return iter;
 }
 
 template <typename Params>
 template <typename... Args>
 typename WTree<Params>::iterator WTree<Params>::emplace_hint_multi_key_args(
-    const_iterator hint, const key_type &key, Args &&...args) {
+    const const_iterator &hint, const key_type &key, Args &&...args) {
     // TODO:
     assert(0);
     return emplace_multi(std::forward<Args>(args)...);
@@ -192,6 +185,7 @@ void WTree<P>::internal_erase(Cursor &iter) {
     if(iter.node->is_internal()) {
         field_type child_lower_bound =
             iter.node->first_left_descendant(iter.index);
+
         // A zero value means that there was no child because [iter.index]=0 has
         // no left child.
         if(child_lower_bound > 0) {
@@ -250,8 +244,9 @@ void WTree<P>::internal_erase(Cursor &iter) {
             m_locator.visit_path_to_smallest_leaf_value(child_iter);
             if(child_iter.node->is_internal()) {
                 // Node should be transform to a leaf.
-                node_type *ancestor =
-                    child_iter.has_ascendant() ? child_iter.ascendant() : iter.node;
+                node_type *ancestor = child_iter.has_ascendant()
+                                          ? child_iter.ascendant()
+                                          : iter.node;
                 const field_type pos = child_iter.has_ascendant()
                                            ? child_iter.position()
                                            : child_lower_bound;
@@ -259,8 +254,8 @@ void WTree<P>::internal_erase(Cursor &iter) {
                 child_iter.node = ancestor->child(pos);
             }
 
-            iter.node->child(child_lower_bound)->move_value(0, iter.node,
-                                                            child_lower_bound);
+            iter.node->child(child_lower_bound)
+                ->move_value(0, iter.node, child_lower_bound);
 
             m_manager.internal_move_smallest_upward(child_iter);
             if(child_iter.node->size() == 0) {
@@ -291,11 +286,10 @@ template <typename P>
 template <typename Iterator>
 Iterator WTree<P>::erase(Iterator &iter) {
     internal_erase(iter);
-    return iter;
+    return std::move(iter);
 }
 
-template <typename P>
-int WTree<P>::erase_key(const key_type &key) {
+template <typename P> int WTree<P>::erase_key(const key_type &key) {
     position_type pos(root(), 0);
     if(locate_position(key, pos) != static_cast<int>(kExactMatch))
         return 0;

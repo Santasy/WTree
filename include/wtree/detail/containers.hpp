@@ -74,8 +74,30 @@ struct WTreeCommonParams : public BalanceOptions {
     using size_helper = WTreeSizeHelper<key_type, TargetNodeBytes, value_type>;
 
     static constexpr uint kTargetNodeBytes = TargetNodeBytes;
-    static constexpr uint kTargetK =
+
+  private:
+    // Capacity the target byte size actually holds; kept signed so a node that
+    // cannot hold three values is rejected instead of wrapping around.
+    static constexpr int kComputedK =
         size_helper::determine_optimal_k(kTargetNodeBytes);
+
+  public:
+    // A node must hold at least 3 values: the growth rule (x1.25, rounded up)
+    // cannot advance from a smaller leaf, and every balance step moves at
+    // least one key up into the parent.
+    static_assert(kComputedK >= 3,
+                  "TargetNodeBytes is too small for this value_type: a node "
+                  "must hold at least 3 values. Increase TargetNodeBytes / "
+                  "WTREE_TARGET_NODE_BYTES or use a smaller value type.");
+
+    // The split rules hand ceil(k/2) slots to the new sibling; below 5 keys
+    // that sibling would hold fewer than 3 and could not grow afterwards.
+    static_assert(!balance_options::use_split || kComputedK >= 5,
+                  "use_split needs at least 5 values per node: the split "
+                  "sibling gets ceil(k/2) slots, which must stay >= 3. "
+                  "Increase TargetNodeBytes or disable split.");
+
+    static constexpr uint kTargetK = static_cast<uint>(kComputedK);
     static constexpr uint kLastGrowth =
         size_helper::determine_last_growth_limit(kTargetK);
     // Initial byte budget for a fresh leaf, derived from the instantiated
@@ -194,22 +216,27 @@ template <typename Tree> class WTreeContainer {
         return m_tree.locate_position(key, pos) == kExactMatch;
     }
 
+    // In-place descent + return the local: no copy of the iterator path.
     iterator lower_bound(const key_type &key) {
         iterator iter(m_tree.root(), 0);
-        return m_tree.lower_bound(key, iter).first;
+        m_tree.lower_bound_in_place(key, iter);
+        return iter;
     }
     const_iterator lower_bound(const key_type &key) const {
         const_iterator iter(m_tree.croot(), 0);
-        return m_tree.lower_bound(key, iter).first;
+        m_tree.lower_bound_in_place(key, iter);
+        return iter;
     }
 
     iterator upper_bound(const key_type &key) {
         iterator iter(m_tree.root(), 0);
-        return m_tree.upper_bound(key, iter).first;
+        m_tree.upper_bound_in_place(key, iter);
+        return iter;
     }
     const_iterator upper_bound(const key_type &key) const {
         const_iterator iter(m_tree.croot(), 0);
-        return m_tree.upper_bound(key, iter).first;
+        m_tree.upper_bound_in_place(key, iter);
+        return iter;
     }
 
     std::pair<iterator, iterator> equal_range(const key_type &key) {

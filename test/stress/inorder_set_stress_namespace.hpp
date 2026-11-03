@@ -74,7 +74,10 @@ using StressBalance =
     WTreeBalanceOptions<WTREE_STRESS_USE_SLIDE, WTREE_STRESS_USE_SPLIT>;
 
 // Target node size (bytes) used by the in-order suites.
-constexpr int kStressNodeBytes = 512;
+// Follows the library's default (WTREE_TARGET_NODE_BYTES, 512 unless
+// overridden), so `-DWTREE_TARGET_NODE_BYTES=64` drives the in-order suites
+// through multi-level boundary chains — the emplace_edge_swap path.
+constexpr int kStressNodeBytes = WTREE_TARGET_NODE_BYTES;
 
 // Default final size, overridden by the execution parameter (argv[1]).
 constexpr size_t kDefaultFinalSize = 100000;
