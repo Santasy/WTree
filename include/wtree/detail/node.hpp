@@ -62,8 +62,9 @@ template <typename Params> class WTreeNode {
         params_type::kBinarySearchThreshold;
     static constexpr bool kUseBinarySearchForInternal =
         params_type::kUseBinarySearchForInternal;
-    static constexpr bool kUseBinarySearchForLeaf =
-        params_type::kUseBinarySearchForLeaf;
+    using leaf_search_mode = typename params_type::WTreeLeafSearch;
+    static constexpr leaf_search_mode kLeafSearchMode =
+        params_type::kLeafSearchMode;
 
     struct base_fields {     // 3 | 5 -> 4 | 6 bytes
         field_type size;     // 1-2 byte (max = [255, 65535])
@@ -144,7 +145,8 @@ template <typename Params> class WTreeNode {
     static bool is_exact_hit(int res, const key_type &key, IterType &iter,
                              const Compare &comp);
 
-    // === Helper functions for in-node rotations (non-move-assignable types) ===
+    // === Helper functions for in-node rotations (non-move-assignable types)
+    // ===
 
     // Helper function to reverse a range for non-move-assignable types.
     void reverse_range(value_type *first, value_type *last);
@@ -320,8 +322,8 @@ template <typename Params> class WTreeNode {
     // Public node search API — picks linear vs binary, calls directly.
     // Internal nodes: compile-time decision (always full at kTargetK keys).
     // Leaf nodes: compile-time direct binary when the threshold forces it
-    // (kBinarySearchThreshold == 1), else a runtime hybrid check
-    // (variable fill). Upper bound: wraps comparator via make_upper_comp.
+    // (kLeafSearchMode), else a runtime hybrid check (variable fill).
+    // Upper bound: wraps comparator via make_upper_comp.
     // =====================================================================
 
     template <typename Compare>
@@ -334,8 +336,10 @@ template <typename Params> class WTreeNode {
 
     template <typename Compare>
     int lower_bound_leaf(const key_type &key, const Compare &comp) const {
-        if constexpr(kUseBinarySearchForLeaf)
+        if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return binary_lower_bound_search(key, 0, size(), comp);
+        else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return linear_lower_bound_search(key, 0, size(), comp);
         else if(size() >= kBinarySearchThreshold)
             return binary_lower_bound_search(key, 0, size(), comp);
         else
@@ -354,8 +358,10 @@ template <typename Params> class WTreeNode {
     template <typename Compare>
     int upper_bound_leaf(const key_type &key, const Compare &comp) const {
         auto uc = make_upper_comp(comp);
-        if constexpr(kUseBinarySearchForLeaf)
+        if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return binary_lower_bound_search(key, 0, size(), uc);
+        else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return linear_lower_bound_search(key, 0, size(), uc);
         else if(size() >= kBinarySearchThreshold)
             return binary_lower_bound_search(key, 0, size(), uc);
         else
@@ -375,8 +381,10 @@ template <typename Params> class WTreeNode {
     template <typename Compare>
     int bounded_lower_bound_leaf(const key_type &key,
                                  const Compare &comp) const {
-        if constexpr(kUseBinarySearchForLeaf)
+        if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return closed_binary_lower_bound_search(key, comp);
+        else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return closed_linear_lower_bound_search(key, comp);
         else if(size() >= kBinarySearchThreshold)
             return closed_binary_lower_bound_search(key, comp);
         else
@@ -398,8 +406,10 @@ template <typename Params> class WTreeNode {
     int bounded_upper_bound_leaf(const key_type &key,
                                  const Compare &comp) const {
         auto uc = make_upper_comp(comp);
-        if constexpr(kUseBinarySearchForLeaf)
+        if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return closed_binary_lower_bound_search(key, uc);
+        else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return closed_linear_lower_bound_search(key, uc);
         else if(size() >= kBinarySearchThreshold)
             return closed_binary_lower_bound_search(key, uc);
         else

@@ -65,6 +65,20 @@
 #define WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX 16
 #endif
 
+// Leaf in-node search policy. Internal nodes decide at compile time (they are
+// always full); leaves have a variable fill, so by default the choice is made
+// per visit against the threshold below. This knob overrides that:
+//   0 = always linear  (no fill check; cheapest code, good while leaves are
+//                       small or the keys are cheap to compare)
+//   1 = auto           (binary once size() >= threshold — the default)
+//   2 = always binary  (no fill check; only sensible when leaves are known to
+//                       be large, and a loss for freshly grown leaves)
+// Per instantiation, not per key class: it also overrides the *complex*
+// threshold when set. Measured in experiments/analysis/comparing/FINDINGS.md.
+#ifndef WTREE_LEAF_SEARCH
+#define WTREE_LEAF_SEARCH 1
+#endif
+
 // Edge insertion at a full internal node rotates the boundary key down the
 // chain. For trivially copyable values a single descending pass carrying the
 // key in a local replaces the descend-then-ascend rotation (see
@@ -74,10 +88,15 @@
 #endif
 
 // Numeric keys: a linear scan of contiguous ints is cheaper than a binary one
-// until a node holds ~255 keys (measured: k=254 ties, k=510 binary wins by
-// ~30% on insert and ~35% on search; below k≈128 binary costs 20-45%).
+// until a node holds ~254 keys (measured on 4-byte keys: k=127 linear wins by
+// 20-45 %, k=254 binary wins by 8-30 % on insert/search/miss, k=510 binary wins
+// by ~30 %). Binary is only worth it for *full* leaves, hence the threshold is
+// compared against a node's fill; internal nodes always decide on kTargetK.
+// 254 is the smallest capacity the grid reaches where binary pays, so it is the
+// inclusive boundary, and it also covers k = 255 (a 1028 B node for uint).
+// See experiments/analysis/comparing/FINDINGS.md §1, §7 and §11.
 #ifndef WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC
-#define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 255
+#define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 254
 #endif
 
 // Initial byte budget of a fresh leaf (it grows x1.25 per step up to

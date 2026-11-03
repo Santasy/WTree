@@ -120,10 +120,22 @@ struct WTreeCommonParams : public BalanceOptions {
     // Internal nodes are always full with kTargetK elements.
     static constexpr bool kUseBinarySearchForInternal =
         kTargetK >= kBinarySearchThreshold;
-    // Threshold 1 can force to use binary search: every non-empty leaf
-    // qualifies, so the leaf search methods take binary search directly and
-    // skip the runtime fill check.
-    static constexpr bool kUseBinarySearchForLeaf = kBinarySearchThreshold == 1;
+    /**
+     * @brief Leaf in-node search policy: always linear, fill-dependent, or
+     * always binary.
+     * @details Internal nodes pick at compile time (always full); leaves are
+     * chosen per visit by default because their fill varies. See
+     * WTREE_LEAF_SEARCH. A threshold of 1 keeps its historical meaning: force
+     * binary for leaves too (the grid's `-bs` variants).
+     */
+    enum class WTreeLeafSearch : uint8_t { Linear = 0, Auto = 1, Binary = 2 };
+    static constexpr WTreeLeafSearch kLeafSearchMode =
+        kBinarySearchThreshold == 1
+            ? WTreeLeafSearch::Binary
+            : static_cast<WTreeLeafSearch>(WTREE_LEAF_SEARCH);
+    static_assert(WTREE_LEAF_SEARCH >= 0 && WTREE_LEAF_SEARCH <= 2,
+                  "WTREE_LEAF_SEARCH must be 0 (linear), 1 (auto) or 2 "
+                  "(binary).");
 };
 
 /**
