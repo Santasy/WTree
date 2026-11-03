@@ -340,6 +340,10 @@ template <typename Params> class WTreeNode {
             return binary_lower_bound_search(key, 0, size(), comp);
         else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
             return linear_lower_bound_search(key, 0, size(), comp);
+        // A leaf's fill is capped by kTargetK, so below the threshold it can
+        // never switch to binary: skip the per-visit check entirely.
+        else if constexpr(kTargetK < kBinarySearchThreshold)
+            return linear_lower_bound_search(key, 0, size(), comp);
         else if(size() >= kBinarySearchThreshold)
             return binary_lower_bound_search(key, 0, size(), comp);
         else
@@ -361,6 +365,8 @@ template <typename Params> class WTreeNode {
         if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return binary_lower_bound_search(key, 0, size(), uc);
         else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return linear_lower_bound_search(key, 0, size(), uc);
+        else if constexpr(kTargetK < kBinarySearchThreshold)
             return linear_lower_bound_search(key, 0, size(), uc);
         else if(size() >= kBinarySearchThreshold)
             return binary_lower_bound_search(key, 0, size(), uc);
@@ -384,6 +390,8 @@ template <typename Params> class WTreeNode {
         if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return closed_binary_lower_bound_search(key, comp);
         else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return closed_linear_lower_bound_search(key, comp);
+        else if constexpr(kTargetK < kBinarySearchThreshold)
             return closed_linear_lower_bound_search(key, comp);
         else if(size() >= kBinarySearchThreshold)
             return closed_binary_lower_bound_search(key, comp);
@@ -409,6 +417,8 @@ template <typename Params> class WTreeNode {
         if constexpr(kLeafSearchMode == leaf_search_mode::Binary)
             return closed_binary_lower_bound_search(key, uc);
         else if constexpr(kLeafSearchMode == leaf_search_mode::Linear)
+            return closed_linear_lower_bound_search(key, uc);
+        else if constexpr(kTargetK < kBinarySearchThreshold)
             return closed_linear_lower_bound_search(key, uc);
         else if(size() >= kBinarySearchThreshold)
             return closed_binary_lower_bound_search(key, uc);
