@@ -66,15 +66,17 @@
 #endif
 
 // Leaf in-node search policy. Internal nodes decide at compile time (they are
-// always full); leaves have a variable fill, so by default the choice is made
-// per visit against the threshold below. This knob overrides that:
-//   0 = always linear  (no fill check; cheapest code, good while leaves are
-//                       small or the keys are cheap to compare)
-//   1 = auto           (binary once size() >= threshold — the default)
-//   2 = always binary  (no fill check; only sensible when leaves are known to
-//                       be large, and a loss for freshly grown leaves)
-// Per instantiation, not per key class: it also overrides the *complex*
-// threshold when set. Measured in experiments/analysis/comparing/FINDINGS.md.
+// always full); leaves have a variable fill, so the classic rule re-decides on
+// every visit with `size() >= threshold`.
+//
+// The default resolves per key class:
+//   0 = always linear      (no fill check)
+//   1 = class default      ← DEFAULT: numeric keys linear, complex keys keep
+//                            the fill check (complex is unmeasured so far)
+//   2 = always binary      (no fill check)
+//   3 = always fill-checked (the previous behaviour, kept for A/B)
+//
+// A binary-search threshold of 1 still forces binary for leaves.
 #ifndef WTREE_LEAF_SEARCH
 #define WTREE_LEAF_SEARCH 1
 #endif

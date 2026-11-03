@@ -123,19 +123,32 @@ struct WTreeCommonParams : public BalanceOptions {
     /**
      * @brief Leaf in-node search policy: always linear, fill-dependent, or
      * always binary.
-     * @details Internal nodes pick at compile time (always full); leaves are
-     * chosen per visit by default because their fill varies. See
-     * WTREE_LEAF_SEARCH. A threshold of 1 keeps its historical meaning: force
-     * binary for leaves too (the grid's `-bs` variants).
+     * @details Internal nodes pick at compile time (always full). Leaves are
+     * sized dynamically, so the historical rule re-decides per visit; the 10M
+     * grid measured that as a loss for numeric keys hence the class-dependent
+     * default below.
      */
-    enum class WTreeLeafSearch : uint8_t { Linear = 0, Auto = 1, Binary = 2 };
-    static constexpr WTreeLeafSearch kLeafSearchMode =
-        kBinarySearchThreshold == 1
-            ? WTreeLeafSearch::Binary
-            : static_cast<WTreeLeafSearch>(WTREE_LEAF_SEARCH);
-    static_assert(WTREE_LEAF_SEARCH >= 0 && WTREE_LEAF_SEARCH <= 2,
-                  "WTREE_LEAF_SEARCH must be 0 (linear), 1 (auto) or 2 "
-                  "(binary).");
+    enum class WTreeLeafSearch : uint8_t {
+        Linear = 0,
+        Auto = 1,
+        Binary = 2,
+        FillCheck = 3
+    };
+    static constexpr WTreeLeafSearch resolve_leaf_search() {
+        if constexpr(kBinarySearchThreshold == 1)
+            return WTreeLeafSearch::Binary; // threshold 1 forces binary leaves
+        if constexpr(WTREE_LEAF_SEARCH == 0)
+            return WTreeLeafSearch::Linear;
+        if constexpr(WTREE_LEAF_SEARCH == 2)
+            return WTreeLeafSearch::Binary;
+        if constexpr(WTREE_LEAF_SEARCH == 3)
+            return WTreeLeafSearch::Auto; // explicitly fill-checked
+        return is_numeric_key ? WTreeLeafSearch::Linear : WTreeLeafSearch::Auto;
+    }
+    static constexpr WTreeLeafSearch kLeafSearchMode = resolve_leaf_search();
+    static_assert(WTREE_LEAF_SEARCH >= 0 && WTREE_LEAF_SEARCH <= 3,
+                  "WTREE_LEAF_SEARCH must be 0 (linear), 1 (class default), "
+                  "2 (binary) or 3 (fill check).");
 };
 
 /**
