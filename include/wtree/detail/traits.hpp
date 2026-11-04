@@ -124,7 +124,7 @@
 
 // Initial byte budget of a fresh leaf (it grows x1.25 per step up to
 // WTREE_TARGET_NODE_BYTES). 0 = derive it from the target node size (the
-// library default: <=64 B nodes start at 16, larger ones at 64). Set it to
+// library default: <=64 B nodes start at 16, larger ones at 40). Set it to
 // sweep the growth ratchet in the comparing microbench.
 #ifndef WTREE_TARGET_INITIAL_BYTES
 #define WTREE_TARGET_INITIAL_BYTES 0
@@ -268,14 +268,16 @@ struct WTreeSizeHelper {
     // Initial node byte budget, cache-size inspired: a fresh leaf starts
     // small enough to stay L1-resident and grows by x1.25 from there.
     // WTREE_TARGET_INITIAL_BYTES overrides it (clamped to the target size);
-    // 0 keeps the derived default.
+    // 0 keeps the derived default: 16 B at <=64 B nodes, 40 B above.
+    // The node layer still enforces
+    // kInitialCapacity <= kTargetK and >= 3.
     static constexpr int determine_initial_bytes(int target_node_bytes) {
         if constexpr(WTREE_TARGET_INITIAL_BYTES > 0) {
             return WTREE_TARGET_INITIAL_BYTES < target_node_bytes
                        ? WTREE_TARGET_INITIAL_BYTES
                        : target_node_bytes;
         } else {
-            return target_node_bytes > 64    ? 64
+            return target_node_bytes > 64    ? 40
                    : target_node_bytes >= 16 ? 16
                                              : target_node_bytes;
         }
