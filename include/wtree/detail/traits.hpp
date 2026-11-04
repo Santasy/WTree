@@ -84,16 +84,22 @@
 #endif
 
 // Boundary probes before the in-node search:
+//  -1 = auto (DEFAULT: 0 when kTargetK >= 127, else 2)
 //   0 = none (plain search, explicit end test)
 //   1 = first key only (plain search; the far side scans)
-//   2 = first and last (DEFAULT: bounded closed_* search)
+//   2 = first and last (bounded closed_* search)
 //
 // Only 2 may use the closed_* search: those loops drop the per-element end
 // test because the probes guarantee the key is inside the node. Modes 0/1
 // must use the unbounded search and re-check exactness. The probe/loop pair
 // is one design (FINDINGS.md §10/H12): do not mix them.
+//
+// The auto border is the 10M allops result: the probes
+// protect the small-node insert path (k <= 63), while from k >= 127 the
+// search win dominates. This is the single place to adjust the border for
+// complex keys once that data exists.
 #ifndef WTREE_SEARCH_PROBES
-#define WTREE_SEARCH_PROBES 2
+#define WTREE_SEARCH_PROBES -1
 #endif
 
 // Edge insertion at a full internal node rotates the boundary key down the

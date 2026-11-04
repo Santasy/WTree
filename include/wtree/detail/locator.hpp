@@ -109,9 +109,20 @@ class WTreeLocator : protected WTreeTypeAliases<Params> {
     using Aliases::kMatchMask;
     using Aliases::kTargetK;
 
-    static_assert(WTREE_SEARCH_PROBES >= 0 && WTREE_SEARCH_PROBES <= 2,
-                  "WTREE_SEARCH_PROBES must be 0 (none), 1 (first key) or "
-                  "2 (first and last).");
+    static_assert(WTREE_SEARCH_PROBES >= -1 && WTREE_SEARCH_PROBES <= 2,
+                  "WTREE_SEARCH_PROBES must be -1 (auto), 0 (none), "
+                  "1 (first key) or 2 (first and last).");
+
+    // Auto keeps the probes on small nodes (where the insert end test is the
+    // cost) and drops them from kTargetK >= 127.
+    // TODO: Adjust the 127 border here for complex keys once measured.
+    static constexpr int resolve_search_probes() {
+        if constexpr(WTREE_SEARCH_PROBES >= 0)
+            return WTREE_SEARCH_PROBES;
+        else
+            return kTargetK >= 127 ? 0 : 2;
+    }
+    static constexpr int kSearchProbes = resolve_search_probes();
 
     const key_compare &m_comp;
 

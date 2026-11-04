@@ -33,10 +33,10 @@ int WTreeLocator<Params>::internal_locate_any(const key_type &key,
         assert(iter.node->size() > 0);
 
         // Boundary probes. For compare_to, the first/last comparisons are
-        // three-way, so an exact hit at either end is free. WTREE_SEARCH_PROBES
+        // three-way, so an exact hit at either end is free. kSearchProbes
         // selects the probe set; only the both-probes mode may use the
         // bounded closed_* search below (see traits.hpp).
-        if constexpr(WTREE_SEARCH_PROBES >= 1) {
+        if constexpr(kSearchProbes >= 1) {
             if constexpr(is_key_compare_to::value) {
                 int cmp_first = key_comp()(key, iter.node->key(0));
                 if(cmp_first < 0) {
@@ -55,7 +55,7 @@ int WTreeLocator<Params>::internal_locate_any(const key_type &key,
             }
         }
 
-        if constexpr(WTREE_SEARCH_PROBES >= 2) {
+        if constexpr(kSearchProbes >= 2) {
             if constexpr(is_key_compare_to::value) {
                 int cmp_last =
                     key_comp()(iter.node->key(iter.node->size() - 1), key);
@@ -75,7 +75,7 @@ int WTreeLocator<Params>::internal_locate_any(const key_type &key,
             }
         }
 
-        if constexpr(WTREE_SEARCH_PROBES >= 2) {
+        if constexpr(kSearchProbes >= 2) {
             // Bounded search — both probes guarantee the key is in
             // [key(0), key(size-1)], so the closed_* loop can drop the
             // per-element end test.
@@ -144,13 +144,13 @@ int WTreeLocator<Params>::internal_bound(const key_type &key,
         // Boundary containment (bool-normalized via compare_keys). The first
         // probe is enough to reject keys before the node; the last probe is
         // what lets the both-probes mode use the bounded search below.
-        if constexpr(WTREE_SEARCH_PROBES >= 1) {
+        if constexpr(kSearchProbes >= 1) {
             if(compare_keys(key, iter.node->key(0))) {
                 iter.index = 0;
                 break;
             }
         }
-        if constexpr(WTREE_SEARCH_PROBES >= 2) {
+        if constexpr(kSearchProbes >= 2) {
             if constexpr(UseLowerBound) {
                 // Strictly-greater only: key == key(last) must fall through so
                 // the bounded search can confirm the exact match (lower bound).
@@ -167,7 +167,7 @@ int WTreeLocator<Params>::internal_bound(const key_type &key,
             }
         }
 
-        if constexpr(WTREE_SEARCH_PROBES >= 2) {
+        if constexpr(kSearchProbes >= 2) {
             if(iter.node->is_leaf()) {
                 if constexpr(UseLowerBound) {
                     int res =
