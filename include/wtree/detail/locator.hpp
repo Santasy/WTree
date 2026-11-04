@@ -109,6 +109,10 @@ class WTreeLocator : protected WTreeTypeAliases<Params> {
     using Aliases::kMatchMask;
     using Aliases::kTargetK;
 
+    static_assert(WTREE_SEARCH_PROBES >= 0 && WTREE_SEARCH_PROBES <= 2,
+                  "WTREE_SEARCH_PROBES must be 0 (none), 1 (first key) or "
+                  "2 (first and last).");
+
     const key_compare &m_comp;
 
     explicit WTreeLocator(const key_compare &comp) : m_comp(comp) {}

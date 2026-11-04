@@ -124,9 +124,14 @@ struct WTreeCommonParams : public BalanceOptions {
      * @brief Leaf in-node search policy: always linear, fill-dependent, or
      * always binary.
      * @details Internal nodes pick at compile time (always full). Leaves are
-     * sized dynamically, so the historical rule re-decides per visit; the 10M
-     * grid measured that as a loss for numeric keys hence the class-dependent
-     * default below.
+     * sized dynamically, so the historical rule re-decides per visit.
+     *
+     * The default (`WTREE_LEAF_SEARCH == 1`) is class-dependent: **Linear**
+     * for arithmetic keys, where the 10M grid measured the per-visit check as
+     * a small loss and the linear scan as at least as good; **Auto**
+     * (fill-checked) for complex keys, because a complex comparison costs far
+     * more than a linear scan step, so binary-searching a filled leaf reduces
+     * the comparison count in the case that matters.
      */
     enum class WTreeLeafSearch : uint8_t {
         Linear = 0,

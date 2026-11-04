@@ -71,14 +71,29 @@
 //
 // The default resolves per key class:
 //   0 = always linear      (no fill check)
-//   1 = class default      ← DEFAULT: numeric keys linear, complex keys keep
-//                            the fill check (complex is unmeasured so far)
+//   1 = class default      ← DEFAULT: numeric keys linear; complex keys keep
+//                            the fill check (Auto), because a complex
+//                            comparison costs far more than a linear scan
+//                            step.
 //   2 = always binary      (no fill check)
 //   3 = always fill-checked (the previous behaviour, kept for A/B)
 //
 // A binary-search threshold of 1 still forces binary for leaves.
 #ifndef WTREE_LEAF_SEARCH
 #define WTREE_LEAF_SEARCH 1
+#endif
+
+// Boundary probes before the in-node search:
+//   0 = none (plain search, explicit end test)
+//   1 = first key only (plain search; the far side scans)
+//   2 = first and last (DEFAULT: bounded closed_* search)
+//
+// Only 2 may use the closed_* search: those loops drop the per-element end
+// test because the probes guarantee the key is inside the node. Modes 0/1
+// must use the unbounded search and re-check exactness. The probe/loop pair
+// is one design (FINDINGS.md §10/H12): do not mix them.
+#ifndef WTREE_SEARCH_PROBES
+#define WTREE_SEARCH_PROBES 2
 #endif
 
 // Edge insertion at a full internal node rotates the boundary key down the
