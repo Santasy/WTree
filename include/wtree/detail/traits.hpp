@@ -110,6 +110,17 @@
 #define WTREE_EDGE_SWAP_NUMERIC 1
 #endif
 
+// Form of the in-node linear scan. -1 = auto (pointer walk at k <= 63, indexed
+// loop above), 1 = pointer walk, 0 = indexed. Both forms are semantically
+// identical (same comparator, same bounded no-end-test contract, same
+// exact-match flag), but the indexed form zero-extends the uint8 index twice
+// per key examined while the pointer walk compiles to a bare `cmp mem,reg`
+// (P16/FINDINGS §28). The 10M A/B: pointer wins 6-12 % at nb 128/256 and is
+// neutral at nb 512, hence the k <= 63 border.
+#ifndef WTREE_SCAN_POINTER
+#define WTREE_SCAN_POINTER -1
+#endif
+
 // Numeric keys: a linear scan of contiguous ints is cheaper than a binary one
 // until a node holds ~254 keys (measured on 4-byte keys: k=127 linear wins by
 // 20-45 %, k=254 binary wins by 8-30 % on insert/search/miss, k=510 binary wins

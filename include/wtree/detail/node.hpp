@@ -66,6 +66,13 @@ template <typename Params> class WTreeNode {
     static constexpr leaf_search_mode kLeafSearchMode =
         params_type::kLeafSearchMode;
 
+    // In-node linear scan form (WTREE_SCAN_POINTER): -1 = auto, 1 = pointer,
+    // 0 = indexed. Auto walks the pointer at k <= 63, where the 10M A/B won
+    // 6-12 % on every phase, and keeps the indexed loop from k = 127 up, where
+    // the same A/B is neutral (P16/FINDINGS §28).
+    static constexpr bool kScanPointer =
+        WTREE_SCAN_POINTER < 0 ? (kTargetK <= 63) : (WTREE_SCAN_POINTER == 1);
+
     struct base_fields {     // 3 | 5 -> 4 | 6 bytes
         field_type size;     // 1-2 byte (max = [255, 65535])
         field_type capacity; // 1-2 byte (max = [255, 65535])

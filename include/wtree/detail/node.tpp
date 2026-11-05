@@ -84,6 +84,27 @@ template <typename Compare>
 int WTreeNode<Params>::linear_lower_bound_search(const key_type &query_key,
                                                  int s, int e,
                                                  const Compare &comp) const {
+    if constexpr(kScanPointer) {
+        // Pointer walk: same contract as the indexed loop below, one load and
+        // one compare per key (no per-element index widening).
+        const value_type *const base = fields.values;
+        const value_type *p = base + s;
+        const value_type *const last = base + e;
+        while(p < last) {
+            if constexpr(is_compare_to<Compare>()) {
+                int c = comp(params_type::get_key(*p), query_key);
+                if(c == 0)
+                    return static_cast<int>(p - base) | kExactMatch;
+                if(c > 0)
+                    break;
+            } else {
+                if(!comp(params_type::get_key(*p), query_key))
+                    break;
+            }
+            ++p;
+        }
+        return static_cast<int>(p - base);
+    }
     while(s < e) {
         if constexpr(is_compare_to<Compare>()) {
             int c = comp(key(s), query_key);
@@ -196,6 +217,26 @@ template <typename Params>
 template <typename Compare>
 int WTreeNode<Params>::closed_linear_lower_bound_search(
     const key_type &query_key, const Compare &comp) const {
+    if constexpr(kScanPointer) {
+        // Pointer walk over the bounded range: the probes guarantee the answer
+        // is inside [key(0), key(size-1)], so the end test stays implicit, and
+        // the loop is a bare load + compare per key.
+        const value_type *const base = fields.values;
+        const value_type *p = base;
+        if constexpr(is_compare_to<Compare>()) {
+            for(;; ++p) {
+                int result = comp(params_type::get_key(*p), query_key);
+                if(result == 0)
+                    return static_cast<int>(p - base) | kExactMatch;
+                if(result > 0)
+                    break;
+            }
+        } else {
+            for(; comp(params_type::get_key(*p), query_key); ++p) {
+            }
+        }
+        return static_cast<int>(p - base);
+    }
     field_type index = 0;
     if constexpr(is_compare_to<Compare>()) {
         for(;; ++index) {
