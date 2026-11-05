@@ -70,11 +70,19 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
             } else {
                 leaves_keycells = this->keys_in_leaves();
             }
+            // A root-only leaf is inline in the tree object (not in the
+            // level); do not count its slack again. Other leaf levels are
+            // separately allocated to capacity, so their unused cells are
+            // part of the allocation (FINDINGS.md §26/H24).
+            const size_type leaf_unused =
+                (this->height == 0 && this->internal_nodes == 0)
+                    ? 0
+                    : this->unused_keycells;
             const size_type internals_memory =
                 this->internal_nodes * sizeof(node_type);
             const size_type leaves_memory =
                 (this->leaf_nodes * kBasefieldsBytes) +
-                (leaves_keycells * sizeof(value_type));
+                ((leaves_keycells + leaf_unused) * sizeof(value_type));
             return internals_memory + leaves_memory;
         }
 
@@ -104,7 +112,7 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
      * @brief Also returns the last created level.
      */
     Level *ensure_level_exists(size_t depth) noexcept {
-        while (levels.size() <= depth) {
+        while(levels.size() <= depth) {
             levels.push_back(Level(levels.size()));
         }
         return &levels[depth];

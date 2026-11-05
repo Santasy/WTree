@@ -376,14 +376,23 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
 
         // The total number of bytes used by the tree (object + all allocated
         // node storage: base fields, key cells and internal pointer arrays).
+        // Leaves are allocated to their capacity, so the unused key cells are
+        // part of the allocation and must be counted; the owtree/btree
+        // registers count the same slack (FINDINGS.md §26/H24). Internal
+        // nodes are kept full, so their unused_keycells contribution is zero.
         size_type bytes_used() const {
             // Special case: root node could have unused keycells.
-            size_t leaves_keycells = keys < target_k ? 0 : keys_in_leaves();
+            const size_t leaves_keycells =
+                keys < target_k ? 0 : keys_in_leaves();
+            // A root-only leaf is inline in the tree object, already counted
+            // by sizeof(wtree_type); adding its slack would double count it.
+            const size_type leaf_unused =
+                internal_nodes == 0 ? 0 : unused_keycells;
             const size_type internals_memory =
                 internal_nodes * sizeof(node_type);
             const size_type leaves_memory =
                 (leaf_nodes * kBasefieldsBytes) +
-                (leaves_keycells * sizeof(value_type));
+                ((leaves_keycells + leaf_unused) * sizeof(value_type));
             return sizeof(wtree_type) + internals_memory + leaves_memory;
         }
 
