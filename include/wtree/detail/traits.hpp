@@ -56,17 +56,14 @@
 // internal) that justifies binary search over the linear scan. A binary scan
 // of 8 slots costs ~3 comparisons against up to 8 for linear, so 8 keKys is
 // the break-even point; below it the short linear scan is cheaper and keeps
-// sequential memory access. Both classes share the value: key-type
-// complexity only re-tuned these two numbers (256/32), which made binary
-// search unreachable for every node size the W-tree derives below a 2 KB
-// target (k < 256 for numeric keys, k < 32 for typical complex keys).
+// sequential memory access.
 
 #ifndef WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX
 #define WTREE_BINARY_SEARCH_THRESHOLD_COMPLEX 16
 #endif
 
-// Leaf in-node search policy. Internal nodes decide at compile time (they are
-// always full); leaves have a variable fill, so the classic rule re-decides on
+// Leaf in-node search policy. Internal nodes decide at compile time;
+// leaves have a variable fill, so the rule re-decides on
 // every visit with `size() >= threshold`.
 //
 // The default resolves per key class:
@@ -76,7 +73,7 @@
 //                            comparison costs far more than a linear scan
 //                            step.
 //   2 = always binary      (no fill check)
-//   3 = always fill-checked (the previous behaviour, kept for A/B)
+//   3 = always fill-checked (...)
 //
 // A binary-search threshold of 1 still forces binary for leaves.
 #ifndef WTREE_LEAF_SEARCH
@@ -91,12 +88,11 @@
 //
 // Only 2 may use the closed_* search: those loops drop the per-element end
 // test because the probes guarantee the key is inside the node. Modes 0/1
-// must use the unbounded search and re-check exactness. The probe/loop pair
-// is one design (FINDINGS.md §10/H12): do not mix them.
+// must use the unbounded search and re-check exactness.
 //
-// The auto border is the 10M allops result: the probes
-// protect the small-node insert path (k <= 63), while from k >= 127 the
-// search win dominates. This is the single place to adjust the border for
+// For the auto border, the probes protect the small-node insert path (k <= 63),
+// while from k >= 127 the search win dominates.
+// This is the single place to adjust the border for
 // complex keys once that data exists.
 #ifndef WTREE_SEARCH_PROBES
 #define WTREE_SEARCH_PROBES -1
@@ -114,9 +110,7 @@
 // loop above), 1 = pointer walk, 0 = indexed. Both forms are semantically
 // identical (same comparator, same bounded no-end-test contract, same
 // exact-match flag), but the indexed form zero-extends the uint8 index twice
-// per key examined while the pointer walk compiles to a bare `cmp mem,reg`
-// (P16/FINDINGS §28). The 10M A/B: pointer wins 6-12 % at nb 128/256 and is
-// neutral at nb 512, hence the k <= 63 border.
+// per key examined while the pointer walk compiles to a bare `cmp mem,reg`.
 #ifndef WTREE_SCAN_POINTER
 #define WTREE_SCAN_POINTER -1
 #endif
@@ -128,7 +122,6 @@
 // compared against a node's fill; internal nodes always decide on kTargetK.
 // 254 is the smallest capacity the grid reaches where binary pays, so it is the
 // inclusive boundary, and it also covers k = 255 (a 1028 B node for uint).
-// See experiments/analysis/comparing/FINDINGS.md §1, §7 and §11.
 #ifndef WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC
 #define WTREE_BINARY_SEARCH_THRESHOLD_NUMERIC 254
 #endif
@@ -193,8 +186,7 @@ struct WTreeBalanceOptions {
  * A change in these priorities must be carefully deliberated.
  */
 struct WTreeRulesAssumptions {
-    // Assumptions for efficient performance. constexpr so the balance rules can
-    // be folded at compile time (HPC: no runtime read of a global).
+    // Assumptions for efficient performance.
     static constexpr bool slide_over_split = true;
     static constexpr bool slide_to_right_first = true;
     static constexpr bool split_to_right_first = true;
@@ -240,11 +232,6 @@ struct WTreeSizeHelper {
         return align_up(base_size, alignof(value_type));
     }
 
-    /**
-     * @brief Determines the optimal k-value from target_node_bytes.
-     * @details First tries a small uchar field type; if the number of keys
-     * exceeds uchar, a ushort type is used.
-     */
     /**
      * @brief Keys per node that fit in -target_node_bytes- (no clamping).
      * @details The caller rejects a too-small result at compile time
