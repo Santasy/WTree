@@ -20,6 +20,7 @@
 
 #include "../detail/containers.hpp"
 
+#include <cassert>
 #include <format>
 
 namespace WTreeLib {
@@ -60,29 +61,22 @@ class WTreeMemoryInstrument : public WTree<Params>::node_stats {
 
         size_t level() const noexcept { return this->height; }
 
-        // The total number of bytes used by the level (object + all allocated
-        // node storage: base fields, key cells and internal pointer arrays).
+        // The total number of bytes used by the level (all allocated node
+        // storage: base fields, key cells and internal pointer arrays).
+        // Internal nodes are allocated at their full kTargetK capacity, so
+        // their slack is already inside sizeof(node_type); leaf nodes are
+        // allocated separately up to their own capacity.
         size_type bytes_used() const {
-            size_t leaves_keycells;
-            if(this->height == 0) { // Root is a special case.
-                leaves_keycells =
-                    this->keys < this->target_k ? 0 : this->keys_in_leaves();
-            } else {
-                leaves_keycells = this->keys_in_leaves();
-            }
-            // A root-only leaf is inline in the tree object (not in the
-            // level); do not count its slack again. Other leaf levels are
-            // separately allocated to capacity, so their unused cells are
-            // part of the allocation (FINDINGS.md §26/H24).
-            const size_type leaf_unused =
-                (this->height == 0 && this->internal_nodes == 0)
-                    ? 0
-                    : this->unused_keycells;
+            const size_type internal_capacity =
+                this->internal_nodes * this->target_k;
+            assert(this->keys + this->unused_keycells >= internal_capacity);
+            const size_type leaf_keycells =
+                this->keys + this->unused_keycells - internal_capacity;
             const size_type internals_memory =
                 this->internal_nodes * sizeof(node_type);
             const size_type leaves_memory =
                 (this->leaf_nodes * kBasefieldsBytes) +
-                ((leaves_keycells + leaf_unused) * sizeof(value_type));
+                (leaf_keycells * sizeof(value_type));
             return internals_memory + leaves_memory;
         }
 

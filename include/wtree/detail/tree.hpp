@@ -369,30 +369,28 @@ class WTree : public Params::key_compare, protected WTreeTypeAliases<Params> {
         }
 
         size_type keys_in_leaves() const noexcept {
-            if(keys == 0)
-                return 0;
-            return keys - (internal_nodes * target_k);
+            const size_type internal_capacity = internal_nodes * target_k;
+            return keys > internal_capacity ? keys - internal_capacity : 0;
         }
 
         // The total number of bytes used by the tree (object + all allocated
         // node storage: base fields, key cells and internal pointer arrays).
-        // Leaves are allocated to their capacity, so the unused key cells are
-        // part of the allocation and must be counted; the owtree/btree
-        // registers count the same slack (FINDINGS.md §26/H24). Internal
-        // nodes are kept full, so their unused_keycells contribution is zero.
+        // Internal nodes are allocated at their full kTargetK capacity, so
+        // their slack is already inside sizeof(node_type); leaf nodes are
+        // allocated separately up to their own capacity. The allocated leaf
+        // cells are keys + unused_keycells - internal_nodes * target_k, which
+        // stays non-negative because every internal node contributes its own
+        // slack.
         size_type bytes_used() const {
-            // Special case: root node could have unused keycells.
-            const size_t leaves_keycells =
-                keys < target_k ? 0 : keys_in_leaves();
-            // A root-only leaf is inline in the tree object, already counted
-            // by sizeof(wtree_type); adding its slack would double count it.
-            const size_type leaf_unused =
-                internal_nodes == 0 ? 0 : unused_keycells;
+            const size_type internal_capacity = internal_nodes * target_k;
+            assert(keys + unused_keycells >= internal_capacity);
+            const size_type leaf_keycells =
+                keys + unused_keycells - internal_capacity;
             const size_type internals_memory =
                 internal_nodes * sizeof(node_type);
             const size_type leaves_memory =
                 (leaf_nodes * kBasefieldsBytes) +
-                ((leaves_keycells + leaf_unused) * sizeof(value_type));
+                (leaf_keycells * sizeof(value_type));
             return sizeof(wtree_type) + internals_memory + leaves_memory;
         }
 

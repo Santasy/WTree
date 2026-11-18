@@ -186,7 +186,7 @@ class map : public WTreeMapContainer<
         Key, Value, Compare, Alloc, TargetNodeSize, Unique, BalanceOptions>>>;
 
   public:
-    using super_type::params_type;
+    using typename super_type::params_type;
 
     // Inherit all constructors from WTreeMapContainer.
     using super_type::super_type;
